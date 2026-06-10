@@ -1,12 +1,15 @@
 {
   "name": "@depic/core",
   "version": "0.1.0",
-  "private": true,
   "description": "Core engine for JS/TS dependency analysis",
+  "license": "MIT",
   "type": "module",
   "exports": {
-    ".": "./src/index.ts"
+    ".": "./dist/index.js"
   },
+  "files": [
+    "dist"
+  ],
   "scripts": {
     "build": "tsc",
     "typecheck": "tsc --noEmit",

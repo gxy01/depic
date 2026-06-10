@@ -1,12 +1,15 @@
 {
   "name": "@depic/cli",
   "version": "0.1.0",
-  "private": true,
   "description": "CLI for depic — JS/TS dependency analysis",
+  "license": "MIT",
   "type": "module",
   "bin": {
     "depic": "./dist/cli.js"
   },
+  "files": [
+    "dist"
+  ],
   "scripts": {
     "build": "tsc",
     "typecheck": "tsc --noEmit",

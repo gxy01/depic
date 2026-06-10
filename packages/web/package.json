@@ -1,12 +1,15 @@
 {
   "name": "@depic/web",
   "version": "0.1.0",
-  "private": true,
   "description": "Web UI for depic — interactive dependency graph visualization",
+  "license": "MIT",
   "type": "module",
   "exports": {
-    ".": "./src/index.ts"
+    ".": "./dist/index.js"
   },
+  "files": [
+    "dist"
+  ],
   "scripts": {
     "build": "tsc",
     "typecheck": "tsc --noEmit",
