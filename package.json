@@ -1,0 +1,21 @@
+{
+  "name": "depic",
+  "private": true,
+  "description": "JS/TS code dependency analysis library",
+  "scripts": {
+    "test": "vitest",
+    "test:run": "vitest run",
+    "build": "pnpm -r build",
+    "typecheck": "pnpm -r typecheck"
+  },
+  "devDependencies": {
+    "typescript": "^5.6.0",
+    "vitest": "^2.1.0"
+  },
+  "pnpm": {
+    "onlyBuiltDependencies": [
+      "@swc/core",
+      "esbuild"
+    ]
+  }
+}

@@ -1,0 +1,25 @@
+{
+  "name": "@depic/cli",
+  "version": "0.1.0",
+  "private": true,
+  "description": "CLI for depic — JS/TS dependency analysis",
+  "type": "module",
+  "bin": {
+    "depic": "./dist/cli.js"
+  },
+  "scripts": {
+    "build": "tsc",
+    "typecheck": "tsc --noEmit",
+    "test": "vitest",
+    "test:run": "vitest run"
+  },
+  "dependencies": {
+    "@depic/core": "workspace:*",
+    "@depic/web": "workspace:*"
+  },
+  "devDependencies": {
+    "@types/node": "^25.9.2",
+    "typescript": "^5.6.0",
+    "vitest": "^2.1.0"
+  }
+}
