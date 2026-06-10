@@ -27,16 +27,16 @@ jobs:
 
       # 按依赖顺序发布：core → web → cli
       - name: Publish @depic/core
-        run: pnpm publish packages/core --no-git-checks --access public
+        run: pnpm publish packages/core --no-git-checks --access public --tag beta
         env:
           NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
 
       - name: Publish @depic/web
-        run: pnpm publish packages/web --no-git-checks --access public
+        run: pnpm publish packages/web --no-git-checks --access public --tag beta
         env:
           NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
 
       - name: Publish @depic/cli
-        run: pnpm publish packages/cli --no-git-checks --access public
+        run: pnpm publish packages/cli --no-git-checks --access public --tag beta
         env:
           NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
