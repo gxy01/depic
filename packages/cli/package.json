@@ -8,7 +8,8 @@
     "depic": "./dist/cli.js"
   },
   "files": [
-    "dist"
+    "dist",
+    "README.md"
   ],
   "scripts": {
     "build": "tsc",
