@@ -18,7 +18,12 @@
   "engines": {
     "vscode": "^1.85.0"
   },
-  "activationEvents": [],
+  "activationEvents": [
+    "onCommand:depic.analyze",
+    "onCommand:depic.cycles",
+    "onCommand:depic.dependents",
+    "onCommand:depic.stats"
+  ],
   "main": "./dist/extension.js",
   "contributes": {
     "commands": [
