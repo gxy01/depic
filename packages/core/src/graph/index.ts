@@ -4,7 +4,7 @@ import type {
   Edge,
   GraphStats,
   DependencyGraphJSON,
-} from './types';
+} from './types.js';
 
 export class DependencyGraph {
   private fileNodes = new Map<string, FileNode>();

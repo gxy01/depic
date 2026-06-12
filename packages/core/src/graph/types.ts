@@ -1,4 +1,4 @@
-import type { SourceLocation, ImportedSymbol } from '../parser';
+import type { SourceLocation, ImportedSymbol } from '../parser/index.js';
 
 /** 项目内文件节点 */
 export interface FileNode {

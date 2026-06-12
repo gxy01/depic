@@ -14,7 +14,7 @@ import type {
   VariableDeclarator,
   ReturnStatement,
 } from '@swc/core';
-import type { ParsedFile, RawImport, RawExport, SourceLocation } from './types';
+import type { ParsedFile, RawImport, RawExport, SourceLocation } from './types.js';
 
 /**
  * specifier 后缀 → import kind 映射。对带已知非 JS 后缀的 specifier

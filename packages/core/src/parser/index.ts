@@ -1,8 +1,8 @@
-export { parseFile } from './parseFile';
+export { parseFile } from './parseFile.js';
 export type {
   SourceLocation,
   ImportedSymbol,
   RawImport,
   RawExport,
   ParsedFile,
-} from './types';
+} from './types.js';

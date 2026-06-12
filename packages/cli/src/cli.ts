@@ -1,5 +1,5 @@
 #!/usr/bin/env node
-import { runAnalyze, runCycles, runDependents, runStats, runWeb, runServe } from './index';
+import { runAnalyze, runCycles, runDependents, runStats, runWeb, runServe } from './index.js';
 import { resolve } from 'node:path';
 
 const args = process.argv.slice(2);

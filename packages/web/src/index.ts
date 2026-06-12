@@ -1,5 +1,5 @@
 import { analyze, type DependencyGraph } from '@depic/core';
-import { renderHtml } from './template';
+import { renderHtml } from './template.js';
 import { createServer } from 'node:http';
 import { readFileSync } from 'node:fs';
 import { resolve as resolvePath } from 'node:path';

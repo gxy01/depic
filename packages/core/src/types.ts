@@ -1,4 +1,4 @@
-import type { WorkspaceConfig } from './resolver/types';
+import type { WorkspaceConfig } from './resolver/types.js';
 
 /** analyze() 输入选项 */
 export interface AnalyzeOptions {

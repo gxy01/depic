@@ -5,7 +5,7 @@ import {
   readdirSync,
 } from 'node:fs';
 import { resolve, dirname, extname, join, normalize } from 'node:path';
-import type { ResolveOptions, ResolvedTarget } from './types';
+import type { ResolveOptions, ResolvedTarget } from './types.js';
 
 const DEFAULT_EXTENSIONS = ['.ts', '.tsx', '.js', '.jsx'];
 

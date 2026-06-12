@@ -1,11 +1,11 @@
 import { readFileSync, readdirSync } from 'node:fs';
 import type { Dirent } from 'node:fs';
 import { join } from 'node:path';
-import { parseFile } from './parser';
-import { Resolver } from './resolver';
-import { DependencyGraph } from './graph';
-import type { AnalyzeOptions } from './types';
-import type { FileNode, ImportInfo } from './graph/types';
+import { parseFile } from './parser/index.js';
+import { Resolver } from './resolver/index.js';
+import { DependencyGraph } from './graph/index.js';
+import type { AnalyzeOptions } from './types.js';
+import type { FileNode, ImportInfo } from './graph/types.js';
 
 const DEFAULT_INCLUDE = ['**/*.{ts,tsx,js,jsx}'];
 
