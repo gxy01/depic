@@ -2,16 +2,38 @@
   "version": "0.2.0",
   "configurations": [
     {
-      "name": "Run Extension",
+      "name": "Run Extension (select folder)",
       "type": "extensionHost",
       "request": "launch",
       "args": [
-        "--extensionDevelopmentPath=${workspaceFolder}/packages/vscode"
+        "--extensionDevelopmentPath=${workspaceFolder}/packages/vscode",
+        "${input:targetFolder}"
       ],
       "preLaunchTask": "Build extension",
       "outFiles": [
         "${workspaceFolder}/packages/vscode/dist/**/*.js"
       ]
+    },
+    {
+      "name": "Run Extension (current project)",
+      "type": "extensionHost",
+      "request": "launch",
+      "args": [
+        "--extensionDevelopmentPath=${workspaceFolder}/packages/vscode",
+        "${workspaceFolder}"
+      ],
+      "preLaunchTask": "Build extension",
+      "outFiles": [
+        "${workspaceFolder}/packages/vscode/dist/**/*.js"
+      ]
+    }
+  ],
+  "inputs": [
+    {
+      "id": "targetFolder",
+      "type": "promptString",
+      "description": "Path to the project folder to analyze",
+      "default": "${workspaceFolder}"
     }
   ]
 }
