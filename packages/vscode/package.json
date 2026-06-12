@@ -2,9 +2,19 @@
   "name": "depic-vscode",
   "displayName": "Depic — Dependency Visualizer",
   "version": "0.1.0",
-  "private": true,
   "description": "Interactive JS/TS dependency graph visualization for VS Code",
+  "license": "MIT",
   "publisher": "depic",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/gxy01/depic",
+    "directory": "packages/vscode"
+  },
+  "files": [
+    "dist",
+    "README.md",
+    "README.zh-CN.md"
+  ],
   "engines": {
     "vscode": "^1.85.0"
   },
@@ -37,8 +47,8 @@
     "test:run": "vitest run"
   },
   "dependencies": {
-    "@depic/core": "workspace:*",
-    "@depic/web": "workspace:*"
+    "@depic/core": "^0.1.0",
+    "@depic/web": "^0.1.0"
   },
   "devDependencies": {
     "@types/node": "^25.9.2",
