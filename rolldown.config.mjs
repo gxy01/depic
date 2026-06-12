@@ -22,11 +22,11 @@ export default defineConfig([
     external: ['@depic/core', '@depic/web', /^node:/],
     platform: 'node',
   },
-  // depic-vscode
+  // depic-vscode (bundle workspace deps, keep native modules external)
   {
     input: 'packages/vscode/src/extension.ts',
     output: { format: 'cjs', dir: 'packages/vscode/dist' },
-    external: ['@depic/core', '@depic/web', 'vscode', /^node:/],
+    external: ['@swc/core', 'vscode', /^node:/],
     platform: 'node',
   },
 ]);
