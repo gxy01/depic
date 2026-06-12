@@ -4,7 +4,7 @@
   "version": "0.1.0",
   "description": "Interactive JS/TS dependency graph visualization for VS Code",
   "license": "MIT",
-  "publisher": "depic",
+  "publisher": "gxy01",
   "repository": {
     "type": "git",
     "url": "https://github.com/gxy01/depic",
