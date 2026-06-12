@@ -5,10 +5,11 @@
   "scripts": {
     "test": "vitest",
     "test:run": "vitest run",
-    "build": "pnpm -r build",
+    "build": "rolldown -c rolldown.config.mjs && pnpm --filter @depic/core build && pnpm --filter @depic/web build && pnpm --filter @depic/cli build && pnpm --filter depic-vscode build",
     "typecheck": "pnpm -r typecheck"
   },
   "devDependencies": {
+    "rolldown": "^1.1.1",
     "typescript": "^5.6.0",
     "vitest": "^2.1.0"
   },
