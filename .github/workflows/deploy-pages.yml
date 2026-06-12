@@ -25,15 +25,16 @@ jobs:
       - name: Setup Pages
         uses: actions/configure-pages@v4
 
+      - name: Prepare static files
+        run: |
+          mkdir _site
+          cp index.html _site/
+          # Add more static files here as needed
+
       - name: Upload artifact
         uses: actions/upload-pages-artifact@v3
         with:
-          path: .
-          # Only include these files
-          include: |
-            index.html
-            README.md
-            README.zh-CN.md
+          path: _site
 
       - name: Deploy
         id: deploy
