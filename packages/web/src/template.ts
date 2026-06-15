@@ -102,6 +102,7 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;backgrou
 </div>
 
 <script>
+function escapeHtml(s) { return s.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'); }
 const RAW = ${graphJson};
 // Build graphology graph
 const G = new graphology.Graph({multi: true});
@@ -344,6 +345,7 @@ function switchView(view) {
   document.getElementById('tree-view').classList.toggle('active', view === 'tree');
   document.getElementById('file-view').classList.toggle('active', view === 'file');
   document.querySelectorAll('.tab').forEach(t => t.classList.toggle('active', t.dataset.view === view));
+  if (view === 'graph' && !sigmaInstance) initGraph();
   if (view === 'tree' && document.getElementById('tree-view').children.length === 0) initTree();
 }
 document.querySelectorAll('.tab').forEach(tab => {
@@ -374,7 +376,6 @@ document.getElementById('search').addEventListener('input', (e) => {
 });
 
 // ─── Init ──────────────────────────────────────────────────────
-initGraph();
 document.getElementById('stats').innerHTML =
   '<span class="pill pill-green">' + RAW.nodes.length + ' nodes</span>' +
   '<span class="pill">' + RAW.edges.length + ' edges</span>' +
