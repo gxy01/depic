@@ -25,14 +25,20 @@ describe('Web visualization', () => {
 
     expect(html).toContain('<!DOCTYPE html>');
     expect(html).toContain('<title>test — Dependency Graph</title>');
-    expect(html).toContain('vis-network');
+    // Uses sigma.js + graphology for WebGL rendering
+    expect(html).toContain('sigma.js');
+    expect(html).toContain('graphology');
     // Should contain graph data
     expect(html).toContain('"nodes"');
     expect(html).toContain('"edges"');
+    // Should have three view tabs
+    expect(html).toContain('data-view="graph"');
+    expect(html).toContain('data-view="tree"');
+    expect(html).toContain('data-view="file"');
     // Should have interactive features
-    expect(html).toContain('filterNodes');
-    expect(html).toContain('resetView');
-    expect(html).toContain('togglePhysics');
+    expect(html).toContain('switchView');
+    expect(html).toContain('showFileView');
+    expect(html).toContain('buildTree');
   });
 
   it('generateHtmlFromGraph escapes HTML in title', async () => {
@@ -47,7 +53,8 @@ describe('Web visualization', () => {
     const html = await generateHtml(tmpDir);
 
     expect(html).toContain('<!DOCTYPE html>');
-    expect(html).toContain('vis-network');
+    expect(html).toContain('sigma.js');
+    expect(html).toContain('graphology');
   });
 
   it('HTML contains all file nodes', async () => {
@@ -74,7 +81,8 @@ describe('Web visualization', () => {
     const html = generateHtmlFromGraph(g, 'empty');
 
     expect(html).toContain('<!DOCTYPE html>');
-    expect(html).toContain('vis-network');
+    expect(html).toContain('sigma.js');
+    expect(html).toContain('graphology');
     // Should contain empty node/edge arrays
     expect(html).toContain('"nodes":[]');
     expect(html).toContain('"edges":[]');
