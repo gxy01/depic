@@ -6,6 +6,7 @@ import { Resolver } from './resolver/index.js';
 import { DependencyGraph } from './graph/index.js';
 import type { AnalyzeOptions } from './types.js';
 import type { FileNode, ImportInfo } from './graph/types.js';
+import type { ParsedFile } from './parser/index.js';
 
 const DEFAULT_INCLUDE = ['**/*.{ts,tsx,js,jsx}'];
 
@@ -16,13 +17,15 @@ export async function analyze(options: AnalyzeOptions): Promise<DependencyGraph>
   const root = options.root;
   const graph = new DependencyGraph();
 
-  // 1. 文件发现
-  let discovered = discoverFiles(root, options.include ?? DEFAULT_INCLUDE);
+  // 预编译 include/exclude glob 模式
+  const includeRegexes = (options.include ?? DEFAULT_INCLUDE).map((p) => globToRegex(p));
+  const excludeRegexes = (options.exclude ?? []).map((p) => globToRegex(p));
 
-  // 1.5 排除文件
-  if (options.exclude && options.exclude.length > 0) {
+  // 1. 文件发现
+  let discovered = discoverFiles(root, includeRegexes);
+  if (excludeRegexes.length > 0) {
     discovered = discovered.filter(
-      (f) => !options.exclude!.some((pattern) => matchGlob(f, pattern)),
+      (f) => !excludeRegexes.some((re) => re.test(f)),
     );
   }
 
@@ -34,68 +37,64 @@ export async function analyze(options: AnalyzeOptions): Promise<DependencyGraph>
     workspace: options.workspace,
   });
 
-  // 3. 解析每个文件 → FileNode（不含 resolved info）
+  // 3. 解析所有文件一次，缓存结果
+  const parsedCache = new Map<string, ParsedFile>();
   for (const filePath of discovered) {
-    addFileToGraph(filePath, graph);
+    try {
+      const source = readFileSync(filePath, 'utf-8');
+      parsedCache.set(filePath, parseFile(source, filePath));
+    } catch {
+      // 文件无法解析，跳过
+    }
   }
 
-  // 4. 解析 import → Edge，并收集 resolved info
-  const resolvedImports = new Map<string, ImportInfo[]>();
-
-  for (const fileNode of graph.files()) {
-    const source = readFileSync(fileNode.id, 'utf-8');
-    const parsed = parseFile(source, fileNode.id);
+  // 4. 单趟遍历：建 FileNode + 解析 import + 建 Edge + 填充 resolved info
+  for (const [filePath, parsed] of parsedCache) {
     const resolvedInfos: ImportInfo[] = [];
 
     for (const imp of parsed.imports) {
-      const resolved = resolver.resolve(imp.specifier, fileNode.id);
+      const resolved = resolver.resolve(imp.specifier, filePath);
 
       if (resolved.kind === 'file' || resolved.kind === 'internal') {
-        if (!graph.getFileNode(resolved.path)) {
-          addFileToGraph(resolved.path, graph);
+        // 确保目标文件存在于缓存中
+        if (!parsedCache.has(resolved.path)) {
+          addMissingFile(resolved.path, parsedCache, graph);
         }
         graph.addEdge({
-          source: fileNode.id,
+          source: filePath,
           target: resolved.path,
           kind: imp.kind,
           specifier: imp.specifier,
           symbols: options.symbolLevel ? imp.symbols : undefined,
           loc: imp.loc,
         });
-        resolvedInfos.push({
-          ...imp,
-          resolvedFile: resolved.path,
-        });
+        resolvedInfos.push({ ...imp, resolvedFile: resolved.path });
       } else if (resolved.kind === 'external') {
         if (!graph.getExternalNode(resolved.name)) {
           graph.addExternalNode({ kind: 'external', id: resolved.name });
         }
         graph.addEdge({
-          source: fileNode.id,
+          source: filePath,
           target: resolved.name,
           kind: imp.kind,
           specifier: imp.specifier,
           symbols: options.symbolLevel ? imp.symbols : undefined,
           loc: imp.loc,
         });
-        resolvedInfos.push({
-          ...imp,
-          resolvedExternal: resolved.name,
-        });
+        resolvedInfos.push({ ...imp, resolvedExternal: resolved.name });
       }
-      // unresolved → 不创建边，也不记录 resolved info
     }
 
-    // 为 re-export 创建边
+    // re-export 边
     for (const exp of parsed.exports) {
       if (exp.reExportFrom) {
-        const resolved = resolver.resolve(exp.reExportFrom, fileNode.id);
+        const resolved = resolver.resolve(exp.reExportFrom, filePath);
         if (resolved.kind === 'file' || resolved.kind === 'internal') {
-          if (!graph.getFileNode(resolved.path)) {
-            addFileToGraph(resolved.path, graph);
+          if (!parsedCache.has(resolved.path)) {
+            addMissingFile(resolved.path, parsedCache, graph);
           }
           graph.addEdge({
-            source: fileNode.id,
+            source: filePath,
             target: resolved.path,
             kind: 're-export',
             specifier: exp.reExportFrom,
@@ -105,31 +104,34 @@ export async function analyze(options: AnalyzeOptions): Promise<DependencyGraph>
       }
     }
 
-    resolvedImports.set(fileNode.id, resolvedInfos);
-  }
-
-  // 5. 更新 FileNode 的 imports（填充 resolvedFile/resolvedExternal）
-  for (const fileNode of graph.files()) {
-    const infos = resolvedImports.get(fileNode.id) ?? [];
-    const updatedNode: FileNode = {
-      ...fileNode,
-      imports: infos,
+    // 构建 FileNode（含 resolved imports）
+    const node: FileNode = {
+      kind: 'file',
+      id: filePath,
+      exports: parsed.exports.map((e) => ({
+        ...e,
+        kind: e.kind as FileNode['exports'][number]['kind'],
+      })),
+      imports: resolvedInfos,
     };
-    // Replace via remove + add
-    graph.addFileNode(updatedNode);
+    graph.addFileNode(node);
   }
 
   return graph;
 }
 
-/** 将单个文件解析并添加到图中 */
-function addFileToGraph(filePath: string, graph: DependencyGraph): void {
-  if (graph.getFileNode(filePath)) return;
-
+/**
+ * 添加文件发现阶段遗漏的目标文件到缓存，并创建 FileNode。
+ */
+function addMissingFile(
+  filePath: string,
+  cache: Map<string, ParsedFile>,
+  graph: DependencyGraph,
+): void {
   try {
     const source = readFileSync(filePath, 'utf-8');
     const parsed = parseFile(source, filePath);
-
+    cache.set(filePath, parsed);
     const node: FileNode = {
       kind: 'file',
       id: filePath,
@@ -144,12 +146,12 @@ function addFileToGraph(filePath: string, graph: DependencyGraph): void {
     };
     graph.addFileNode(node);
   } catch {
-    // 文件无法解析，跳过
+    // 跳过
   }
 }
 
 /** 简单文件发现：递归遍历目录，按 glob 模式匹配 */
-function discoverFiles(root: string, patterns: string[]): string[] {
+function discoverFiles(root: string, regexes: RegExp[]): string[] {
   const result: string[] = [];
 
   function walk(dir: string): void {
@@ -165,7 +167,7 @@ function discoverFiles(root: string, patterns: string[]): string[] {
         if (entry.name === 'node_modules' || entry.name.startsWith('.')) continue;
         walk(fullPath);
       } else if (entry.isFile()) {
-        if (matchPattern(fullPath, patterns)) {
+        if (regexes.some((re) => re.test(fullPath))) {
           result.push(fullPath);
         }
       }
@@ -176,23 +178,6 @@ function discoverFiles(root: string, patterns: string[]): string[] {
   return result;
 }
 
-/** 简单模式匹配 */
-function matchPattern(filePath: string, patterns: string[]): boolean {
-  for (const pattern of patterns) {
-    const regex = globToRegex(pattern);
-    if (regex.test(filePath)) {
-      return true;
-    }
-  }
-  return false;
-}
-
-/** 检查文件路径是否匹配单个 glob 模式 */
-function matchGlob(filePath: string, pattern: string): boolean {
-  return globToRegex(pattern).test(filePath);
-}
-
-/** 简化 glob → regex */
 function globToRegex(pattern: string): RegExp {
   let regex = pattern
     .replace(/\./g, '\\.')
