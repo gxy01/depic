@@ -1,6 +1,6 @@
 {
   "name": "@depic/web",
-  "version": "0.1.1",
+  "version": "0.1.3",
   "description": "Web UI for depic — interactive dependency graph visualization",
   "license": "MIT",
   "type": "module",
