@@ -28,5 +28,11 @@ export default defineConfig([
     output: { format: 'cjs', dir: 'packages/vscode/dist' },
     external: ['@swc/core', 'vscode', /^node:/],
     platform: 'node',
+    resolve: {
+      alias: {
+        '@depic/core': new URL('packages/core/dist/index.js', import.meta.url).pathname,
+        '@depic/web': new URL('packages/web/dist/index.js', import.meta.url).pathname,
+      },
+    },
   },
 ]);

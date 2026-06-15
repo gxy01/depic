@@ -48,6 +48,8 @@
     "test:run": "vitest run"
   },
   "dependencies": {
+    "@depic/core": "workspace:*",
+    "@depic/web": "workspace:*",
     "@swc/core": "^1.11.0"
   },
   "devDependencies": {

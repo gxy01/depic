@@ -56,11 +56,14 @@ importers:
   packages/vscode:
     dependencies:
       '@depic/core':
-        specifier: 0.1.0-beta.2
-        version: 0.1.0-beta.2
+        specifier: workspace:*
+        version: link:../core
       '@depic/web':
-        specifier: 0.1.0-beta.2
-        version: 0.1.0-beta.2
+        specifier: workspace:*
+        version: link:../web
+      '@swc/core':
+        specifier: ^1.11.0
+        version: 1.15.41
     devDependencies:
       '@types/node':
         specifier: ^25.9.2
@@ -92,12 +95,6 @@ importers:
         version: 2.1.9(@types/node@25.9.2)
 
 packages:
-
-  '@depic/core@0.1.0-beta.2':
-    resolution: {integrity: sha512-ZqGAHaKNb9pH8w2+gPDwkwPt3QWxBe+WRFCVVLdOTqmqKyD3Ww5+FQ6bl7CpSC6dADBa3LOkd+WQxd4xanN1AA==}
-
-  '@depic/web@0.1.0-beta.2':
-    resolution: {integrity: sha512-ZwQ/eYMHpkvtlAR9rPdXL57MTBDGkg1lFW7Fp0c3txqlNTSJziJrMH3JE6FEYKpRnKM0ozCtSeHrD3mtBPv48w==}
 
   '@emnapi/core@1.11.0':
     resolution: {integrity: sha512-l9Oo58x0HOP5znGzVhYW9U3e5wVuA4LAZU2AGezTmkhO1CgQRFDhDg4nneHsu/t3WniXg9QrG2nIXL/ZS8ln8Q==}
@@ -824,18 +821,6 @@ packages:
     hasBin: true
 
 snapshots:
-
-  '@depic/core@0.1.0-beta.2':
-    dependencies:
-      '@swc/core': 1.15.41
-    transitivePeerDependencies:
-      - '@swc/helpers'
-
-  '@depic/web@0.1.0-beta.2':
-    dependencies:
-      '@depic/core': 0.1.0-beta.2
-    transitivePeerDependencies:
-      - '@swc/helpers'
 
   '@emnapi/core@1.11.0':
     dependencies:
