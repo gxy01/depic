@@ -86,6 +86,9 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;backgrou
     <button class="tab" data-view="tree">Tree</button>
     <button class="tab" data-view="file">File</button>
   </div>
+  <select id="pkg-select" style="padding:5px 10px;border-radius:6px;border:1px solid var(--border);background:var(--bg);color:var(--text);font-size:13px;max-width:200px">
+    <option value="">All packages</option>
+  </select>
   <input id="search" type="text" placeholder="Search files…">
   <div class="legend">
     <span><span class="dot" style="background:#58a6ff"></span>File</span>
@@ -201,7 +204,8 @@ function buildTree(rootFile, depth, ancestry) {
     return '<span class="cycle-link" data-file="' + escapeHtml(rootFile) + '">↩ cycle back to depth ' + firstIdx + '</span>';
   }
   const node = RAW.nodes.find(n => n.id===rootFile);
-  const edges = RAW.edges.filter(e => e.source===rootFile);
+  const allEdges = window._treeEdges || RAW.edges;
+  const edges = allEdges.filter(e => e.source===rootFile);
   const isExternal = node && node.kind==='external';
   const newAncestry = new Set(ancestry);
   newAncestry.add(rootFile);
@@ -255,19 +259,25 @@ function renderTree(rootFiles) {
   });
 }
 function initTree() {
-  // Root files = files with no dependents (entry points)
-  const allFiles = RAW.nodes.filter(n => n.kind==='file').map(n => n.id);
-  const hasDependents = new Set(RAW.edges.map(e => e.target));
-  const roots = allFiles.filter(f => !hasDependents.has(f));
-  if (roots.length === 0) roots.push(...allFiles.slice(0, 1));
-  if (roots.length > 100) roots.length = 100; // Cap initial roots
+  // Filter files by selected package
+  const pkgFiles = RAW.nodes.filter(n => n.kind==='file' && (!currentPkg || n.package === currentPkg)).map(n => n.id);
+  const pkgFileSet = new Set(pkgFiles);
+  // Edges relevant to the current package
+  const pkgEdges = currentPkg
+    ? RAW.edges.filter(e => pkgFileSet.has(e.source) || pkgFileSet.has(e.target))
+    : RAW.edges;
+  const hasDependents = new Set(pkgEdges.map(e => e.target));
+  const roots = pkgFiles.filter(f => !hasDependents.has(f));
+  if (roots.length === 0) roots.push(...pkgFiles.slice(0, 1));
+  if (roots.length > 100) roots.length = 100;
   treeExpanded.clear();
-  // Auto-expand first 2 levels
   for (const r of roots.slice(0, 10)) {
     treeExpanded.add(r);
-    const deps = RAW.edges.filter(e => e.source===r);
+    const deps = pkgEdges.filter(e => e.source===r);
     for (const d of deps.slice(0, 5)) treeExpanded.add(d.target);
   }
+  // Store pkgEdges for renderTree
+  window._treeEdges = pkgEdges;
   renderTree(roots);
 }
 
@@ -338,6 +348,78 @@ function showFileView(filePath) {
 }
 
 // ─── Tab Switching ────────────────────────────────────────────
+// ─── Package grouping ──────────────────────────────────────────
+const pkgNames = [...new Set(RAW.nodes.filter(n => n.package).map(n => n.package))].sort();
+const sel = document.getElementById('pkg-select');
+pkgNames.forEach(p => { const o = document.createElement('option'); o.value = p; o.textContent = p; sel.appendChild(o); });
+let currentPkg = '';
+
+function isNodeVisible(nodeId) {
+  if (!currentPkg) return true;
+  const node = RAW.nodes.find(n => n.id === nodeId);
+  if (!node) return false;
+  return node.package === currentPkg;
+}
+function getNodePkg(nodeId) {
+  const node = RAW.nodes.find(n => n.id === nodeId);
+  return node?.package || '';
+}
+function edgeCrossesPackage(edge) {
+  return currentPkg && (getNodePkg(edge.source) !== currentPkg || getNodePkg(edge.target) !== currentPkg);
+}
+
+sel.addEventListener('change', () => {
+  currentPkg = sel.value;
+  if (currentView === 'graph' && sigmaInstance) rebuildGraph();
+  if (currentView === 'tree') initTree();
+  if (currentView === 'file') document.getElementById('file-view').innerHTML = '<div class="file-header">Select a file to inspect</div>';
+  updateStats();
+});
+
+function updateStats() {
+  const nodes = currentPkg ? RAW.nodes.filter(n => n.package === currentPkg) : RAW.nodes;
+  const fileCount = nodes.filter(n => n.kind === 'file').length;
+  const extCount = nodes.filter(n => n.kind === 'external').length;
+  const edges = currentPkg
+    ? RAW.edges.filter(e => isNodeVisible(e.source) || isNodeVisible(e.target))
+    : RAW.edges;
+  const internalEdges = currentPkg
+    ? edges.filter(e => !edgeCrossesPackage(e))
+    : edges;
+  document.getElementById('stats').innerHTML =
+    '<span class="pill pill-green">' + fileCount + ' files</span>' +
+    '<span class="pill">' + edges.length + ' edges</span>' +
+    (currentPkg ? '<span class="pill pill-green">' + internalEdges.length + ' internal</span>' : '') +
+    (currentPkg ? '<span class="pill pill-orange">' + (edges.length - internalEdges.length) + ' cross-pkg</span>' : '') +
+    (extCount > 0 ? '<span class="pill pill-orange">' + extCount + ' external</span>' : '');
+}
+
+function rebuildGraph() {
+  if (!sigmaInstance) { initGraph(); return; }
+  G.clear();
+  const visibleFiles = new Set(RAW.nodes.filter(n => currentPkg ? n.package === currentPkg : true).map(n => n.id));
+  for (const n of RAW.nodes) {
+    if (!currentPkg || n.package === currentPkg) {
+      const inCycle = cycleSet.has(n.id);
+      const name = n.id.split('/').slice(-2).join('/');
+      if (n.kind === 'file') {
+        G.addNode(n.id, { label: name, size: Math.min(15, 3 + Math.log2(1 + (RAW.edges.filter(e => e.target===n.id && (currentPkg ? isNodeVisible(e.source) : true)).length))), color: inCycle ? '#f85149' : '#58a6ff', x: Math.random()*10, y: Math.random()*10 });
+      } else {
+        G.addNode(n.id, { label: n.id, size: 8, color: '#d2991d', x: Math.random()*10, y: Math.random()*10 });
+      }
+    }
+  }
+  for (const e of RAW.edges) {
+    if (!visibleFiles.has(e.source) && !visibleFiles.has(e.target)) continue;
+    if (!G.hasNode(e.source)) G.addNode(e.source, { label: e.source.split('/').pop(), size: 3, color: '#555' });
+    if (!G.hasNode(e.target)) G.addNode(e.target, { label: e.target.split('/').pop(), size: 3, color: '#555' });
+    const cross = currentPkg && getNodePkg(e.source) !== getNodePkg(e.target);
+    G.addEdge(e.source, e.target, { color: cross ? '#d2991d55' : '#30363d', size: cross ? 0.5 : 1, type: cross ? 'line' : 'arrow' });
+  }
+  sigmaInstance.refresh();
+  sigmaInstance.getCamera().animatedReset({ duration: 300 });
+}
+
 let currentView = 'graph';
 function switchView(view) {
   currentView = view;
@@ -376,10 +458,7 @@ document.getElementById('search').addEventListener('input', (e) => {
 });
 
 // ─── Init ──────────────────────────────────────────────────────
-document.getElementById('stats').innerHTML =
-  '<span class="pill pill-green">' + RAW.nodes.length + ' nodes</span>' +
-  '<span class="pill">' + RAW.edges.length + ' edges</span>' +
-  (cycleSet.size > 0 ? '<span class="pill pill-red">' + cycleSet.size + ' in cycles</span>' : '');
+updateStats();
 <\/script>
 </body>
 </html>`;
