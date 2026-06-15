@@ -2,16 +2,46 @@
   "version": "2.0.0",
   "tasks": [
     {
-      "type": "npm",
-      "script": "build",
-      "path": "packages/vscode",
+      "label": "Build all",
+      "dependsOn": [
+        "Build core (tsc)",
+        "Build web server (tsc)",
+        "Build web client (vite)",
+        "Build extension (tsc)"
+      ],
       "group": {
         "kind": "build",
         "isDefault": true
-      },
+      }
+    },
+    {
+      "type": "npm",
+      "script": "build",
+      "path": "packages/core",
+      "problemMatcher": ["$tsc"],
+      "label": "Build core (tsc)"
+    },
+    {
+      "type": "npm",
+      "script": "build",
+      "path": "packages/web",
+      "problemMatcher": ["$tsc"],
+      "label": "Build web server (tsc)"
+    },
+    {
+      "type": "npm",
+      "script": "build-client",
+      "path": "packages/web",
+      "problemMatcher": [],
+      "label": "Build web client (vite)"
+    },
+    {
+      "type": "npm",
+      "script": "build",
+      "path": "packages/vscode",
       "isBackground": false,
       "problemMatcher": ["$tsc"],
-      "label": "Build extension"
+      "label": "Build extension (tsc)"
     }
   ]
 }
