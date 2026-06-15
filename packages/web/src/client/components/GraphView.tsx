@@ -1,10 +1,10 @@
 import React, { useEffect, useRef, useState, useCallback } from 'react';
 import Graph from 'graphology';
 import Sigma from 'sigma';
-import type { DependencyGraphJSON, Edge } from '../data';
+import type { LightweightGraph } from '../data';
 
 interface Props {
-  data: DependencyGraphJSON;
+  data: LightweightGraph;
   cycleSet: Set<string>;
   search: string;
   currentPkg: string;

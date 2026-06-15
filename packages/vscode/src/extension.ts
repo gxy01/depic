@@ -1,8 +1,11 @@
 import * as vscode from 'vscode';
 import { analyze, type DependencyGraph } from '@depic/core';
-import { generateHtmlFromGraph } from '@depic/web';
+import { generateHtmlFromGraph, getFileDetails } from '@depic/web';
+import { existsSync, readFileSync, appendFileSync, writeFileSync } from 'node:fs';
+import { join } from 'node:path';
 
 let outputChannel: vscode.OutputChannel;
+let extContext: vscode.ExtensionContext;
 
 /** 缓存的图实例，按 workspace root 索引 */
 const graphCache = new Map<string, { graph: DependencyGraph; timestamp: number }>();
@@ -12,6 +15,7 @@ async function getCachedGraph(root: string): Promise<DependencyGraph> {
   const cached = graphCache.get(root);
   if (cached) return cached.graph;
 
+  ensureGitignore(root);
   const graph = await analyze({ root });
   graphCache.set(root, { graph, timestamp: Date.now() });
   return graph;
@@ -28,6 +32,7 @@ function invalidateAllCaches(): void {
 }
 
 export function activate(context: vscode.ExtensionContext): void {
+  extContext = context;
   outputChannel = vscode.window.createOutputChannel('Depic');
 
   // 监听文件变化，自动失效缓存
@@ -70,6 +75,23 @@ export function deactivate(): void {
   graphCache.clear();
 }
 
+/** 确保 .depic/ 在 .gitignore 中 */
+function ensureGitignore(root: string): void {
+  try {
+    const gitignorePath = join(root, '.gitignore');
+    const pattern = '.depic/';
+    if (existsSync(gitignorePath)) {
+      const content = readFileSync(gitignorePath, 'utf-8');
+      if (content.split('\n').some((line: string) => line.trim() === pattern)) return;
+      appendFileSync(gitignorePath, `\n${pattern}\n`);
+    } else {
+      writeFileSync(gitignorePath, `${pattern}\n`);
+    }
+  } catch {
+    // 非关键操作，忽略错误
+  }
+}
+
 async function getRoot(): Promise<string | undefined> {
   const folders = vscode.workspace.workspaceFolders;
   if (!folders || folders.length === 0) {
@@ -93,8 +115,15 @@ async function showGraph(): Promise<void> {
         'depicGraph',
         'Dependency Graph',
         vscode.ViewColumn.Beside,
-        { enableScripts: true },
+        { enableScripts: true, retainContextWhenHidden: true },
       );
+      // Handle file detail requests from webview
+      panel.webview.onDidReceiveMessage((msg) => {
+        if (msg.type === 'getFileDetails') {
+          const details = getFileDetails(graph, msg.fileId);
+          panel.webview.postMessage({ type: 'fileDetails', fileId: msg.fileId, data: details });
+        }
+      });
       panel.webview.html = html;
     },
   );

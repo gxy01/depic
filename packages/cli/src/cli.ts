@@ -1,5 +1,5 @@
 #!/usr/bin/env node
-import { runAnalyze, runCycles, runDependents, runStats, runWeb, runServe } from './index.js';
+import { runAnalyze, runCycles, runDependents, runStats, runWeb, runServe, runInit } from './index.js';
 import { resolve } from 'node:path';
 
 const args = process.argv.slice(2);
@@ -35,6 +35,11 @@ async function main(): Promise<void> {
       process.stdout.write((await runWeb(root, output)) + '\n');
       break;
     }
+    case 'init': {
+      const root = resolve(args[1] ?? '.');
+      process.stdout.write(runInit(root) + '\n');
+      break;
+    }
     case 'serve': {
       const root = resolve(args[1] ?? '.');
       const port = parseInt(args[2]) || 3000;
@@ -47,6 +52,7 @@ async function main(): Promise<void> {
       process.stderr.write(`depic — JS/TS dependency analysis
 
 Usage:
+  depic init [root]          Add .depic/ to .gitignore
   depic analyze <root>       Analyze project, output JSON (--dot for DOT)
   depic cycles <root>        Detect circular dependencies
   depic dependents <file> [root]  Show files that depend on <file>

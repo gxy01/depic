@@ -1,6 +1,6 @@
-import { readFileSync, readdirSync } from 'node:fs';
+import { readFileSync, readdirSync, existsSync } from 'node:fs';
 import type { Dirent } from 'node:fs';
-import { join, dirname } from 'node:path';
+import { join, dirname, relative } from 'node:path';
 import { parseFile } from './parser/index.js';
 import { Resolver } from './resolver/index.js';
 import { DependencyGraph } from './graph/index.js';
@@ -21,8 +21,11 @@ export async function analyze(options: AnalyzeOptions): Promise<DependencyGraph>
   const includeRegexes = (options.include ?? DEFAULT_INCLUDE).map((p) => globToRegex(p));
   const excludeRegexes = (options.exclude ?? []).map((p) => globToRegex(p));
 
+  // 0. 加载 .gitignore 排除模式
+  const gitignorePatterns = loadGitignorePatterns(root);
+
   // 1. 文件发现
-  let discovered = discoverFiles(root, includeRegexes);
+  let discovered = discoverFiles(root, includeRegexes, gitignorePatterns);
   if (excludeRegexes.length > 0) {
     discovered = discovered.filter(
       (f) => !excludeRegexes.some((re) => re.test(f)),
@@ -159,11 +162,14 @@ function addMissingFile(
   }
 }
 
-/** 简单文件发现：递归遍历目录，按 glob 模式匹配 */
-function discoverFiles(root: string, regexes: RegExp[]): string[] {
+/** 简单文件发现：递归遍历目录，按 glob 模式匹配，跳过 gitignore 文件 */
+function discoverFiles(root: string, regexes: RegExp[], gitignorePatterns: GitignorePattern[]): string[] {
   const result: string[] = [];
 
   function walk(dir: string): void {
+    // 加载当前目录的 .gitignore
+    const localPatterns = loadGitignorePatterns(dir);
+
     let entries: Dirent[];
     try {
       entries = readdirSync(dir, { withFileTypes: true });
@@ -172,6 +178,13 @@ function discoverFiles(root: string, regexes: RegExp[]): string[] {
     }
     for (const entry of entries) {
       const fullPath = join(dir, entry.name);
+      const relPath = relative(root, fullPath);
+
+      // 检查是否匹配 gitignore
+      if (isGitignored(relPath, entry.isDirectory(), [...gitignorePatterns, ...localPatterns])) {
+        continue;
+      }
+
       if (entry.isDirectory()) {
         if (entry.name === 'node_modules' || entry.name.startsWith('.')) continue;
         walk(fullPath);
@@ -213,6 +226,68 @@ function buildPackageMap(filePaths: string[]): Map<string, string | undefined> {
     }
   }
   return result;
+}
+
+// ─── .gitignore 支持 ─────────────────────────────────────────
+
+interface GitignorePattern {
+  /** 原始模式字符串 */
+  raw: string;
+  /** 转换后的正则 */
+  regex: RegExp;
+  /** 是否仅匹配目录 */
+  directoryOnly: boolean;
+  /** 是否为否定（! 模式） */
+  negative: boolean;
+}
+
+function loadGitignorePatterns(dir: string): GitignorePattern[] {
+  const gitignorePath = join(dir, '.gitignore');
+  if (!existsSync(gitignorePath)) return [];
+
+  try {
+    const raw = readFileSync(gitignorePath, 'utf-8');
+    return raw
+      .split('\n')
+      .map((line) => line.trim())
+      .filter((line) => line && !line.startsWith('#'))
+      .map((line) => {
+        const negative = line.startsWith('!');
+        const pattern = negative ? line.slice(1) : line;
+        const directoryOnly = pattern.endsWith('/');
+        const clean = (directoryOnly ? pattern.slice(0, -1) : pattern).replace(/^\/+/, '');
+        const regex = gitignoreToRegex(clean);
+        return { raw: line, regex, directoryOnly, negative };
+      });
+  } catch {
+    return [];
+  }
+}
+
+function gitignoreToRegex(pattern: string): RegExp {
+  let re = pattern
+    .replace(/\./g, '\\.')
+    .replace(/\*\*/g, '<<DOUBLESTAR>>')
+    .replace(/\*/g, '[^/]*')
+    .replace(/<<DOUBLESTAR>>/g, '.*')
+    .replace(/\?/g, '.');
+  // Match anywhere in the path unless anchored
+  return new RegExp(`(^|/)${re}($|/)`);
+}
+
+function isGitignored(
+  relPath: string,
+  isDir: boolean,
+  patterns: GitignorePattern[],
+): boolean {
+  let ignored = false;
+  for (const p of patterns) {
+    if (p.directoryOnly && !isDir) continue;
+    if (p.regex.test(relPath) || p.regex.test(relPath + '/')) {
+      ignored = !p.negative;
+    }
+  }
+  return ignored;
 }
 
 function globToRegex(pattern: string): RegExp {

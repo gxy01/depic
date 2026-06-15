@@ -1,12 +1,14 @@
-import React, { useMemo, useState, useCallback } from 'react';
-import { Virtuoso } from 'react-virtuoso';
-import type { DependencyGraphJSON } from '../data';
+import React, { useMemo, useState, useCallback, useRef, useEffect } from 'react';
+import { Virtuoso, type VirtuosoHandle } from 'react-virtuoso';
+import type { LightweightGraph } from '../data';
 
 interface Props {
-  data: DependencyGraphJSON;
+  data: LightweightGraph;
   cycleSet: Set<string>;
   search: string;
   onSelectFile: (f: string) => void;
+  scrollToFileRef: React.MutableRefObject<((f: string) => void) | null>;
+  highlightedFile: string | null;
 }
 
 interface FlatRow {
@@ -20,11 +22,10 @@ interface FlatRow {
   isExternal: boolean;
 }
 
-export function TreeView({ data, cycleSet, search, onSelectFile }: Props) {
+export function TreeView({ data, cycleSet, search, onSelectFile, scrollToFileRef, highlightedFile }: Props) {
+  const virtuosoRef = useRef<VirtuosoHandle>(null);
   const [expanded, setExpanded] = useState<Set<string>>(() => {
-    // Auto-expand first level
     const init = new Set<string>();
-    const fileIds = new Set(data.nodes.filter(n => n.kind === 'file').map(n => n.id));
     const hasDependents = new Set(data.edges.map(e => e.target));
     const roots = data.nodes.filter(n => n.kind === 'file' && !hasDependents.has(n.id)).map(n => n.id).slice(0, 15);
     for (const r of roots) {
@@ -48,14 +49,12 @@ export function TreeView({ data, cycleSet, search, onSelectFile }: Props) {
     const fileIds = new Set(data.nodes.filter(n => n.kind === 'file').map(n => n.id));
     const hasDependents = new Set(data.edges.map(e => e.target));
 
-    // Root files = no dependents within data
     const roots = data.nodes
       .filter(n => n.kind === 'file' && !hasDependents.has(n.id))
       .map(n => n.id)
       .slice(0, 200);
 
     if (roots.length === 0) {
-      // All files have dependents (or no files), pick first 10
       const first = data.nodes.filter(n => n.kind === 'file').slice(0, 10).map(n => n.id);
       roots.push(...first);
     }
@@ -93,26 +92,49 @@ export function TreeView({ data, cycleSet, search, onSelectFile }: Props) {
       }
     }
 
-    for (const r of roots) {
-      walk(r, 0, new Set());
-    }
+    for (const r of roots) walk(r, 0, new Set());
 
-    // Filter by search
+    // Filter or highlight by search
     if (search) {
-      return rows.filter(r => r.file.toLowerCase().includes(search.toLowerCase()));
+      const q = search.toLowerCase();
+      return rows.filter(r => r.file.toLowerCase().includes(q));
     }
     return rows;
   }, [data, expanded, search]);
 
+  // Expose scrollToFile
+  const rowIndexMap = useMemo(() => {
+    const map = new Map<string, number>();
+    flatRows.forEach((r, i) => map.set(r.file, i));
+    return map;
+  }, [flatRows]);
+
+  useEffect(() => {
+    scrollToFileRef.current = (file: string) => {
+      // Expand ancestors to make the file visible in the tree
+      const ancestors = findAncestors(file, data);
+      setExpanded(prev => {
+        const next = new Set(prev);
+        for (const a of ancestors) next.add(a);
+        return next;
+      });
+      // Scroll after a frame to let the tree re-render
+      requestAnimationFrame(() => {
+        const idx = rowIndexMap.get(file);
+        if (idx !== undefined && virtuosoRef.current) {
+          virtuosoRef.current.scrollToIndex({ index: idx, align: 'center', behavior: 'smooth' });
+        }
+      });
+    };
+  }, [rowIndexMap, data, scrollToFileRef]);
+
   const rowRenderer = useCallback((index: number) => {
     const row = flatRows[index];
+    if (!row) return null;
     const padLeft = 8 + row.depth * 20;
+    const isHighlighted = row.file === highlightedFile;
     return (
-      <div
-        className="tree-row"
-        style={{ paddingLeft: padLeft }}
-        key={row.file + '@' + index}
-      >
+      <div className={'tree-row' + (isHighlighted ? ' highlight' : '')} style={{ paddingLeft: padLeft }}>
         <span className="toggle" onClick={() => toggle(row.file)}>
           {row.hasChildren ? (row.isExpanded ? '▼' : '▶') : ' '}
         </span>
@@ -127,6 +149,7 @@ export function TreeView({ data, cycleSet, search, onSelectFile }: Props) {
   return (
     <div className="tree-container">
       <Virtuoso
+        ref={virtuosoRef}
         totalCount={flatRows.length}
         itemContent={rowRenderer}
         computeItemKey={(i) => flatRows[i]?.file + '@' + flatRows[i]?.depth + '@' + i}
@@ -134,4 +157,23 @@ export function TreeView({ data, cycleSet, search, onSelectFile }: Props) {
       />
     </div>
   );
+}
+
+/** Walk up edges to find all ancestors of a file */
+function findAncestors(file: string, data: LightweightGraph): string[] {
+  const ancestors: string[] = [];
+  const visited = new Set<string>();
+  const queue = [file];
+  while (queue.length > 0) {
+    const cur = queue.shift()!;
+    const incoming = data.edges.filter(e => e.target === cur);
+    for (const e of incoming) {
+      if (!visited.has(e.source)) {
+        visited.add(e.source);
+        ancestors.push(e.source);
+        queue.push(e.source);
+      }
+    }
+  }
+  return ancestors;
 }

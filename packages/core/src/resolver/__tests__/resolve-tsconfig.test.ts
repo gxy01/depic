@@ -111,7 +111,6 @@ describe('resolve tsconfig paths', () => {
 
   it('uses tsconfig nearest to fromFile (nested tsconfig)', () => {
     // Root tsconfig: no paths
-    const { writeFileSync, mkdirSync } = require('node:fs');
     writeFileSync(
       join(tmpDir, 'tsconfig.json'),
       JSON.stringify({ compilerOptions: { baseUrl: '.' } }),

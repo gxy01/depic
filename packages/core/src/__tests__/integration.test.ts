@@ -1,5 +1,7 @@
 import { describe, it, expect } from 'vitest';
-import { resolve } from 'node:path';
+import { mkdtempSync, writeFileSync, chmodSync, rmSync } from 'node:fs';
+import { resolve, join } from 'node:path';
+import { tmpdir } from 'node:os';
 import { analyze } from '../analyze';
 
 const ROOT = resolve(import.meta.dirname, '../../../..');
@@ -121,10 +123,6 @@ describe('integration: analyze self', () => {
   });
 
   it('handles unreadable files gracefully', async () => {
-    const { mkdtempSync, writeFileSync, chmodSync, rmSync } = require('node:fs');
-    const { join } = require('node:path');
-    const { tmpdir } = require('node:os');
-
     const testDir = mkdtempSync(join(tmpdir(), 'depic-unreadable-'));
     writeFileSync(join(testDir, 'good.ts'), 'export const x = 1;');
     writeFileSync(join(testDir, 'bad.ts'), 'export const y = 1;');

@@ -1,6 +1,6 @@
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useRef, useCallback } from 'react';
 import { getData, detectCycles, getPackageNames } from './data';
-import type { DependencyGraphJSON } from './data';
+import type { LightweightGraph } from './data';
 import { Toolbar } from './components/Toolbar';
 import { GraphView } from './components/GraphView';
 import { TreeView } from './components/TreeView';
@@ -13,29 +13,44 @@ export default function App() {
   const cycleSet = useMemo(() => detectCycles(data), [data]);
   const pkgNames = useMemo(() => getPackageNames(data), [data]);
 
-  const [tab, setTab] = useState<Tab>('graph');
+  const [tab, setTab] = useState<Tab>('tree');
   const [search, setSearch] = useState('');
   const [currentPkg, setCurrentPkg] = useState('');
   const [selectedFile, setSelectedFile] = useState<string | null>(null);
+  const scrollToFileRef = useRef<((f: string) => void) | null>(null);
 
-  const filteredData: DependencyGraphJSON = useMemo(() => {
+  const fileNames = useMemo(
+    () => data.nodes.filter(n => n.kind === 'file').map(n => ({ id: n.id, pkg: n.package ?? '' })),
+    [data],
+  );
+
+  const filteredData: LightweightGraph = useMemo(() => {
     if (!currentPkg) return data;
     const pkgFileIds = new Set(
       data.nodes.filter(n => n.kind === 'file' && n.package === currentPkg).map(n => n.id),
     );
     const visibleNodes = data.nodes.filter(
-      n => !currentPkg || n.kind === 'external' || n.package === currentPkg || pkgFileIds.has(n.id),
+      n => n.kind === 'external' || n.package === currentPkg || pkgFileIds.has(n.id),
     );
     const visibleEdges = data.edges.filter(
-      e => pkgFileIds.has(e.source) || pkgFileIds.has(e.target) || (data.nodes.find(n => n.id === e.source)?.kind === 'external') || (data.nodes.find(n => n.id === e.target)?.kind === 'external'),
+      e => pkgFileIds.has(e.source) || pkgFileIds.has(e.target),
     );
     return { nodes: visibleNodes, edges: visibleEdges };
   }, [data, currentPkg]);
 
-  const handleSelectFile = (file: string) => {
+  const handleSelectFile = useCallback((file: string) => {
     setSelectedFile(file);
     setTab('file');
-  };
+  }, []);
+
+  const [highlightedFile, setHighlightedFile] = useState<string | null>(null);
+
+  const handleSearchSelect = useCallback((file: string) => {
+    setSearch('');
+    setHighlightedFile(file);
+    setTab('tree');
+    requestAnimationFrame(() => scrollToFileRef.current?.(file));
+  }, []);
 
   return (
     <div className="app">
@@ -49,6 +64,8 @@ export default function App() {
         pkgNames={pkgNames}
         data={filteredData}
         cycleCount={cycleSet.size}
+        fileNames={fileNames}
+        onSearchSelect={handleSearchSelect}
       />
       <div className="content">
         {tab === 'graph' && (
@@ -66,6 +83,8 @@ export default function App() {
             cycleSet={cycleSet}
             search={search}
             onSelectFile={handleSelectFile}
+            scrollToFileRef={scrollToFileRef}
+            highlightedFile={highlightedFile}
           />
         )}
         {tab === 'file' && (

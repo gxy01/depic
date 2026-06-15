@@ -6,9 +6,12 @@
     "test": "vitest",
     "test:run": "vitest run",
     "build": "rolldown -c rolldown.config.mjs && pnpm --filter @depic/core build && pnpm --filter @depic/web build && pnpm --filter @depic/cli build && pnpm --filter depic-vscode build",
-    "typecheck": "pnpm -r typecheck"
+    "typecheck": "pnpm -r typecheck",
+    "lint": "oxlint --config oxlintrc.json packages/*/src",
+    "lint:fix": "oxlint --config oxlintrc.json --fix packages/*/src"
   },
   "devDependencies": {
+    "oxlint": "^1.69.0",
     "rolldown": "^1.1.1",
     "typescript": "^5.6.0",
     "vitest": "^2.1.0"
