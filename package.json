@@ -11,6 +11,7 @@
     "lint:fix": "oxlint --config oxlintrc.json --fix packages/*/src"
   },
   "devDependencies": {
+    "@types/node": "^25.9.2",
     "oxlint": "^1.69.0",
     "rolldown": "^1.1.1",
     "typescript": "^5.6.0",

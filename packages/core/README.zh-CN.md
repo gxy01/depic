@@ -1,39 +1,50 @@
 # @depic/core
 
-JS/TS 依赖分析核心引擎。使用 SWC 解析源码、将模块标识符解析为文件路径、构建有向依赖图并提供查询 API。
+JS/TS 代码依赖分析核心引擎。基于 SWC 解析源码，构建项目依赖图。
 
-## 功能
+[English](./README.md) | 中文
 
-- **Parser** — 通过 SWC 提取 `import`/`export`/`require` 语句
-- **Resolver** — 解析裸标识符、相对路径、tsconfig 路径、workspace 包
-- **Graph** — 构建依赖图、循环检测、拓扑排序、传递依赖
+## 特性
+
+- **Parser** — 通过 SWC AST 提取 `import`/`export`/`require`，支持 15+ 种语法
+- **Resolver** — 解析 specifier：相对路径、tsconfig paths（含嵌套）、node_modules、monorepo workspace 包
+- **Graph** — 有向图，支持环检测、传递依赖、依赖路径、符号溯源（re-export / export * 链路）
+- **Monorepo** — 自动检测 package.json 边界，支持 include/exclude glob 过滤
+- **符号级分析** — 可选 `symbolLevel`，`resolveSymbol()` 追踪符号原始定义
 
 ## 安装
 
 ```bash
-npm i @depic/core
+npm install @depic/core
 ```
 
-## API
+## 使用
 
 ```ts
-import { analyze, parseFile, Resolver, DependencyGraph } from '@depic/core';
+import { analyze } from '@depic/core';
 
-// 分析项目
 const graph = await analyze({ root: '/path/to/project' });
 
-// JSON 输出
-console.log(JSON.stringify(graph.toJSON(), null, 2));
+// 循环依赖检测
+graph.getCircularDependencies();
 
-// DOT 输出 (用于 Graphviz)
-console.log(graph.toDot());
+// 谁依赖了某个文件
+graph.getDependents('/path/to/file.ts');
 
-// 统计信息
-console.log(graph.stats());
+// 两个文件间的所有依赖路径
+graph.getDependencyChain('a.ts', 'b.ts');
 
-// 循环依赖
-console.log(graph.getCircularDependencies());
+// 符号溯源
+graph.resolveSymbol('index.ts', 'formatDate');
 
-// 谁依赖了某文件？
-console.log(graph.getDependents('/path/to/file.ts'));
+// 统计
+graph.stats(); // { fileCount, edgeCount, externalCount, ... }
+
+// 导出
+graph.toJSON();
+graph.toDot();
 ```
+
+## License
+
+MIT

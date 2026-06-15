@@ -1,36 +1,53 @@
 # @depic/web
 
-Interactive web UI for visualizing JS/TS dependency graphs. Generate standalone HTML reports or start a local server with live graph browsing.
+Interactive dependency graph visualization. Generates a self-contained HTML file with a React app, supporting thousands of files.
+
+English | [中文](./README.zh-CN.md)
+
+## Features
+
+- **Sigma.js WebGL** — Hardware-accelerated graph rendering for 3,000+ nodes
+- **Three views** — Graph (force-directed), Tree (virtual scrolling via react-virtuoso), File (detail panel)
+- **Search autocomplete** — cmdk-powered command palette with file name matching
+- **Package filter** — Monorepo support: auto-detect sub-packages, filter by dropdown
+- **Cycle highlighting** — Files in circular dependencies marked in red
+- **Self-contained** — Single HTML file, no server required
 
 ## Install
 
 ```bash
-npm i @depic/web
+npm install @depic/web
+```
+
+## Usage
+
+```ts
+import { analyze } from '@depic/core';
+import { generateHtmlFromGraph } from '@depic/web';
+import { writeFileSync } from 'node:fs';
+
+const graph = await analyze({ root: '/path/to/project' });
+const html = generateHtmlFromGraph(graph, 'My Project');
+writeFileSync('deps.html', html);
+```
+
+Or via CLI:
+
+```bash
+npx depic web /path/to/project
+npx depic serve /path/to/project  # live server on :3000
 ```
 
 ## API
 
-```ts
-import { generateHtml, generateHtmlFromGraph, startServer } from '@depic/web';
-import { analyze } from '@depic/core';
-
-// Generate HTML from a project root
-const html = await generateHtml('/path/to/project');
-
-// Or from an existing graph
-const graph = await analyze({ root: '/path/to/project' });
-const html2 = generateHtmlFromGraph(graph, 'My Project');
-
-// Start a local server with API + visualization
-await startServer('/path/to/project', 3000);
-// → http://localhost:3000
-```
-
-## Endpoints (when using startServer)
-
-| Path | Description |
+| Function | Description |
 |---|---|
-| `GET /` | Interactive dependency graph page |
-| `GET /api/graph` | Full graph as JSON |
-| `GET /api/stats` | Dependency statistics |
-| `GET /api/cycles` | Circular dependency list |
+| `generateHtml(rootDir)` | Analyze project and return HTML string |
+| `generateHtmlFromGraph(graph, title)` | Build HTML from existing graph |
+| `startServer(rootDir, port?)` | Start HTTP server with API + viz |
+| `toLightweightJSON(graph)` | Serialize graph to compact JSON |
+| `getFileDetails(graph, fileId)` | Get full import/export details for a file |
+
+## License
+
+MIT
