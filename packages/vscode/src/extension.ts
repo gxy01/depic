@@ -12,6 +12,7 @@ async function getCachedGraph(root: string): Promise<DependencyGraph> {
   const cached = graphCache.get(root);
   if (cached) return cached.graph;
 
+  ensureGitignore(root);
   const graph = await analyze({ root });
   graphCache.set(root, { graph, timestamp: Date.now() });
   return graph;
@@ -68,6 +69,25 @@ export function activate(context: vscode.ExtensionContext): void {
 export function deactivate(): void {
   outputChannel?.dispose();
   graphCache.clear();
+}
+
+/** 确保 .depic/ 在 .gitignore 中 */
+function ensureGitignore(root: string): void {
+  const { existsSync, readFileSync, appendFileSync, writeFileSync } = require('node:fs');
+  const { join } = require('node:path');
+  try {
+    const gitignorePath = join(root, '.gitignore');
+    const pattern = '.depic/';
+    if (existsSync(gitignorePath)) {
+      const content = readFileSync(gitignorePath, 'utf-8');
+      if (content.split('\n').some((line: string) => line.trim() === pattern)) return;
+      appendFileSync(gitignorePath, `\n${pattern}\n`);
+    } else {
+      writeFileSync(gitignorePath, `${pattern}\n`);
+    }
+  } catch {
+    // 非关键操作，忽略错误
+  }
 }
 
 async function getRoot(): Promise<string | undefined> {

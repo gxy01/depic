@@ -1,7 +1,7 @@
 import { analyze } from '@depic/core';
 import { generateHtml, startServer } from '@depic/web';
-import { relative } from 'node:path';
-import { writeFileSync } from 'node:fs';
+import { relative, join } from 'node:path';
+import { writeFileSync, existsSync, readFileSync, appendFileSync } from 'node:fs';
 
 export async function runAnalyze(rootDir: string, dot = false): Promise<string> {
   const graph = await analyze({ root: rootDir });
@@ -35,6 +35,22 @@ export async function runWeb(rootDir: string, output?: string): Promise<string> 
   const outFile = output ?? 'deps.html';
   writeFileSync(outFile, html, 'utf-8');
   return `Written to ${outFile}`;
+}
+
+export function runInit(rootDir: string): string {
+  const gitignorePath = join(rootDir, '.gitignore');
+  const pattern = '.depic/';
+
+  if (existsSync(gitignorePath)) {
+    const content = readFileSync(gitignorePath, 'utf-8');
+    if (content.split('\n').some((line: string) => line.trim() === pattern)) {
+      return `${pattern} already in .gitignore`;
+    }
+    appendFileSync(gitignorePath, `\n${pattern}\n`);
+  } else {
+    writeFileSync(gitignorePath, `${pattern}\n`);
+  }
+  return `Added ${pattern} to .gitignore`;
 }
 
 export async function runServe(rootDir: string, port = 3000): Promise<string> {
