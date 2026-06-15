@@ -93,9 +93,15 @@ async function showGraph(): Promise<void> {
         'depicGraph',
         'Dependency Graph',
         vscode.ViewColumn.Beside,
-        { enableScripts: true },
+        { enableScripts: true, retainContextWhenHidden: true },
       );
-      panel.webview.html = html;
+      // Inject CSP nonce into script tag for VS Code webview compatibility
+      const nonce = (panel.webview as any).cspSource ?? '';
+      const withNonce = html.replace(
+        '<script>',
+        `<script nonce="${nonce}">`,
+      );
+      panel.webview.html = withNonce;
     },
   );
 }
