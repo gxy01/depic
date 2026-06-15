@@ -22,10 +22,16 @@ jobs:
 
       - run: pnpm install --frozen-lockfile
 
-      - name: Build extension
-        run: pnpm --filter depic-vscode build
+      - name: Build all packages
+        run: pnpm build
 
       - name: Publish to VS Code Marketplace
-        run: cd packages/vscode && npx @vscode/vsce publish
+        run: |
+          cd packages/vscode
+          rm -rf node_modules
+          npm install @swc/core --production --no-save --ignore-scripts --legacy-peer-deps
+          mv ../../package.json ../../package.json.bak
+          mv ../../pnpm-workspace.yaml ../../pnpm-workspace.yaml.bak
+          npx @vscode/vsce publish
         env:
           VSCE_PAT: ${{ secrets.VSCE_PAT }}

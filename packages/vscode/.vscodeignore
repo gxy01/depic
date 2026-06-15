@@ -1,7 +1,9 @@
 .vscode/**
 src/**
 node_modules/**
+!node_modules/@swc/**
 **/__tests__/**
 **/vitest.config.*
 tsconfig.json
 .gitignore
+.npmrc
