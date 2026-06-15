@@ -18,6 +18,7 @@ interface FlatRow {
   isExpanded: boolean;
   isCycle: boolean;
   isExternal: boolean;
+  isMatch: boolean;
 }
 
 export function TreeView({ data, cycleSet, search, onSelectFile }: Props) {
@@ -72,6 +73,8 @@ export function TreeView({ data, cycleSet, search, onSelectFile }: Props) {
       const newAncestry = new Set(ancestry);
       newAncestry.add(file);
 
+      const isMatch = search ? file.toLowerCase().includes(search.toLowerCase()) : false;
+
       rows.push({
         file,
         depth,
@@ -81,6 +84,7 @@ export function TreeView({ data, cycleSet, search, onSelectFile }: Props) {
         isExpanded,
         isCycle,
         isExternal: node?.kind === 'external',
+        isMatch,
       });
 
       if (isExpanded && hasChildren && !isCycle) {
@@ -97,19 +101,17 @@ export function TreeView({ data, cycleSet, search, onSelectFile }: Props) {
       walk(r, 0, new Set());
     }
 
-    // Filter by search
-    if (search) {
-      return rows.filter(r => r.file.toLowerCase().includes(search.toLowerCase()));
-    }
     return rows;
   }, [data, expanded, search]);
 
   const rowRenderer = useCallback((index: number) => {
     const row = flatRows[index];
     const padLeft = 8 + row.depth * 20;
+    const rowClass = ['tree-row', row.isMatch ? 'highlight' : row.isMatch === false && search ? 'dimmed' : '']
+      .filter(Boolean).join(' ');
     return (
       <div
-        className="tree-row"
+        className={rowClass}
         style={{ paddingLeft: padLeft }}
         key={row.file + '@' + index}
       >
@@ -122,7 +124,7 @@ export function TreeView({ data, cycleSet, search, onSelectFile }: Props) {
         <span className="spec">{row.path}</span>
       </div>
     );
-  }, [flatRows, toggle, onSelectFile]);
+  }, [flatRows, toggle, onSelectFile, search]);
 
   return (
     <div className="tree-container">

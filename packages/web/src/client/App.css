@@ -45,6 +45,8 @@ body{background:var(--bg);color:var(--text);overflow:hidden}
 .tree-row .tag{font-size:9px;padding:0 4px;border-radius:3px;margin-left:4px}
 .tree-row .tag-ext{color:var(--orange);background:#d2991d22}
 .tree-row .tag-cycle{color:var(--red);background:#f8514922}
+.tree-row.highlight{background:#1a3a5c;outline:1px solid var(--accent);border-radius:3px}
+.tree-row.dimmed{opacity:.35}
 
 /* FileView */
 .file-view{height:100%;overflow-y:auto;padding:16px}
