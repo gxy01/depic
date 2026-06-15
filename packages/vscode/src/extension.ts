@@ -1,6 +1,8 @@
 import * as vscode from 'vscode';
 import { analyze, type DependencyGraph } from '@depic/core';
 import { generateHtmlFromGraph } from '@depic/web';
+import { existsSync, readFileSync, appendFileSync, writeFileSync } from 'node:fs';
+import { join } from 'node:path';
 
 let outputChannel: vscode.OutputChannel;
 
@@ -73,8 +75,6 @@ export function deactivate(): void {
 
 /** 确保 .depic/ 在 .gitignore 中 */
 function ensureGitignore(root: string): void {
-  const { existsSync, readFileSync, appendFileSync, writeFileSync } = require('node:fs');
-  const { join } = require('node:path');
   try {
     const gitignorePath = join(root, '.gitignore');
     const pattern = '.depic/';
