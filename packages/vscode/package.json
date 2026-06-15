@@ -1,7 +1,7 @@
 {
   "name": "depic-vscode",
   "displayName": "Depic — Dependency Visualizer",
-  "version": "0.1.1",
+  "version": "0.1.2",
   "description": "Interactive JS/TS dependency graph visualization for VS Code",
   "license": "MIT",
   "publisher": "gxy01",

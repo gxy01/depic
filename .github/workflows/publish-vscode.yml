@@ -25,13 +25,21 @@ jobs:
       - name: Build all packages
         run: pnpm build
 
-      - name: Publish to VS Code Marketplace
+      - name: Bundle deps and publish
         run: |
           cd packages/vscode
           rm -rf node_modules
-          npm install @swc/core --production --no-save --ignore-scripts --legacy-peer-deps
+          mkdir -p node_modules/@depic/core/dist node_modules/@depic/web/dist node_modules/@swc/core
+          cp -r ../core/dist/* node_modules/@depic/core/dist/
+          cp -r ../web/dist/* node_modules/@depic/web/dist/
+          cp -r ../web/dist-client node_modules/@depic/web/dist-client
+          cp -r ../../node_modules/.pnpm/@swc+core@1.15.41/node_modules/@swc/core/* node_modules/@swc/core/
+          echo '{"name":"@depic/core","version":"0.1.1","type":"module","exports":{".":"./dist/index.js"}}' > node_modules/@depic/core/package.json
+          echo '{"name":"@depic/web","version":"0.1.1","type":"module","exports":{".":"./dist/index.js"}}' > node_modules/@depic/web/package.json
           mv ../../package.json ../../package.json.bak
           mv ../../pnpm-workspace.yaml ../../pnpm-workspace.yaml.bak
-          npx @vscode/vsce publish
+          npx @vscode/vsce publish --no-dependencies
+          mv ../../package.json.bak ../../package.json
+          mv ../../pnpm-workspace.yaml.bak ../../pnpm-workspace.yaml
         env:
           VSCE_PAT: ${{ secrets.VSCE_PAT }}
