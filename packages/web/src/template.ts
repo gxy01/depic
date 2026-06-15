@@ -132,67 +132,21 @@ const cycleSet = new Set();
   for (const k of adj.keys()) { if (color.get(k)===WHITE) dfs(k); }
 })();
 
-// Populate graphology
-for (const n of RAW.nodes) {
-  if (n.kind === 'file') {
-    const name = n.id.split('/').slice(-2).join('/');
-    const inCycle = cycleSet.has(n.id);
-    G.addNode(n.id, {
-      label: name,
-      size: Math.min(15, 3 + Math.log2(1 + (RAW.edges.filter(e => e.target===n.id).length))),
-      color: inCycle ? '#f85149' : '#58a6ff',
-      x: Math.random()*10, y: Math.random()*10,
-    });
-  } else {
-    G.addNode(n.id, {
-      label: n.id,
-      size: 8,
-      color: '#d2991d',
-      x: Math.random()*10, y: Math.random()*10,
-    });
-  }
-}
-for (const e of RAW.edges) {
-  if (!G.hasNode(e.source) || !G.hasNode(e.target)) continue;
-  G.addEdge(e.source, e.target, { color: '#30363d', size: 1 });
-}
-
 // ─── Graph View (Sigma.js) ───────────────────────────────────
 let sigmaInstance = null;
 function initGraph() {
   if (sigmaInstance) { sigmaInstance.kill(); sigmaInstance = null; }
+  populateGraph();
   sigmaInstance = new Sigma(G, document.getElementById('graph-container'), {
     renderEdgeLabels: false,
     enableEdgeEvents: true,
     minCameraRatio: 0.05,
     maxCameraRatio: 10,
-    labelRenderer: (node, data) => data.label,
     defaultNodeLabelColor: '#c9d1d9',
   });
-
-  // Hover → highlight
-  sigmaInstance.on('enterNode', ({node}) => {
-    const panel = document.getElementById('hover-panel');
-    const fileNode = RAW.nodes.find(n => n.id===node);
-    if (!fileNode) return;
-    const deps = RAW.edges.filter(e => e.source===node).length;
-    const depees = RAW.edges.filter(e => e.target===node).length;
-    const inCycle = cycleSet.has(node);
-    panel.innerHTML = '<div class="path">' + node.split('/').slice(-4).join('/') + '</div>' +
-      '<div class="row"><span>📤 Imports: ' + deps + '</span><span>📥 Dependents: ' + depees + '</span>' +
-      (inCycle ? '<span class="pill pill-red">In cycle</span>' : '') + '</div>';
-    panel.style.display = 'block';
-  });
-  sigmaInstance.on('leaveNode', () => {
-    document.getElementById('hover-panel').style.display = 'none';
-  });
-
-  // Click → switch to File view
-  sigmaInstance.on('clickNode', ({node}) => {
-    showFileView(node);
-    document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
-    document.querySelector('[data-view="file"]').classList.add('active');
-  });
+  sigmaInstance.on('enterNode', onEnterNode);
+  sigmaInstance.on('leaveNode', onLeaveNode);
+  sigmaInstance.on('clickNode', onClickNode);
 }
 
 // ─── Tree View ────────────────────────────────────────────────
@@ -395,29 +349,69 @@ function updateStats() {
 }
 
 function rebuildGraph() {
-  if (!sigmaInstance) { initGraph(); return; }
+  if (sigmaInstance) { sigmaInstance.kill(); sigmaInstance = null; }
+  populateGraph();
+  sigmaInstance = new Sigma(G, document.getElementById('graph-container'), {
+    renderEdgeLabels: false, enableEdgeEvents: true,
+    minCameraRatio: 0.05, maxCameraRatio: 10,
+    defaultNodeLabelColor: '#c9d1d9',
+  });
+  sigmaInstance.on('enterNode', onEnterNode);
+  sigmaInstance.on('leaveNode', onLeaveNode);
+  sigmaInstance.on('clickNode', onClickNode);
+  sigmaInstance.getCamera().animatedReset({ duration: 300 });
+  updateStats();
+}
+
+function populateGraph() {
   G.clear();
-  const visibleFiles = new Set(RAW.nodes.filter(n => currentPkg ? n.package === currentPkg : true).map(n => n.id));
-  for (const n of RAW.nodes) {
-    if (!currentPkg || n.package === currentPkg) {
-      const inCycle = cycleSet.has(n.id);
-      const name = n.id.split('/').slice(-2).join('/');
-      if (n.kind === 'file') {
-        G.addNode(n.id, { label: name, size: Math.min(15, 3 + Math.log2(1 + (RAW.edges.filter(e => e.target===n.id && (currentPkg ? isNodeVisible(e.source) : true)).length))), color: inCycle ? '#f85149' : '#58a6ff', x: Math.random()*10, y: Math.random()*10 });
-      } else {
-        G.addNode(n.id, { label: n.id, size: 8, color: '#d2991d', x: Math.random()*10, y: Math.random()*10 });
-      }
-    }
+  const pkgNodes = RAW.nodes.filter(n => !currentPkg || n.package === currentPkg);
+  const pkgFileSet = new Set(pkgNodes.filter(n => n.kind === 'file').map(n => n.id));
+  for (const n of pkgNodes) {
+    const inCycle = n.kind === 'file' && cycleSet.has(n.id);
+    const name = n.kind === 'file' ? n.id.split('/').slice(-2).join('/') : n.id;
+    G.addNode(n.id, {
+      label: name,
+      size: n.kind === 'file' ? Math.min(15, 3 + Math.log2(1 + RAW.edges.filter(e => e.target===n.id && pkgFileSet.has(e.source)).length)) : 8,
+      color: n.kind === 'external' ? '#d2991d' : (inCycle ? '#f85149' : '#58a6ff'),
+      x: Math.random() * 10, y: Math.random() * 10
+    });
   }
   for (const e of RAW.edges) {
-    if (!visibleFiles.has(e.source) && !visibleFiles.has(e.target)) continue;
-    if (!G.hasNode(e.source)) G.addNode(e.source, { label: e.source.split('/').pop(), size: 3, color: '#555' });
-    if (!G.hasNode(e.target)) G.addNode(e.target, { label: e.target.split('/').pop(), size: 3, color: '#555' });
+    const srcIn = pkgFileSet.has(e.source);
+    const tgtIn = pkgFileSet.has(e.target);
+    if (!srcIn && !tgtIn) continue;
+    if (!G.hasNode(e.source)) {
+      G.addNode(e.source, { label: e.source.split('/').pop(), size: 3, color: '#555', x: Math.random()*10, y: Math.random()*10 });
+    }
+    if (!G.hasNode(e.target)) {
+      G.addNode(e.target, { label: e.target.split('/').pop(), size: 3, color: '#555', x: Math.random()*10, y: Math.random()*10 });
+    }
     const cross = currentPkg && getNodePkg(e.source) !== getNodePkg(e.target);
-    G.addEdge(e.source, e.target, { color: cross ? '#d2991d55' : '#30363d', size: cross ? 0.5 : 1, type: cross ? 'line' : 'arrow' });
+    G.addEdge(e.source, e.target, {
+      color: cross ? '#d2991d55' : '#30363d',
+      size: cross ? 0.5 : 1
+    });
   }
-  sigmaInstance.refresh();
-  sigmaInstance.getCamera().animatedReset({ duration: 300 });
+}
+
+function onEnterNode({node}) {
+  const panel = document.getElementById('hover-panel');
+  const fileNode = RAW.nodes.find(n => n.id===node);
+  if (!fileNode) return;
+  const deps = RAW.edges.filter(e => e.source===node).length;
+  const depees = RAW.edges.filter(e => e.target===node).length;
+  const inCycle = cycleSet.has(node);
+  panel.innerHTML = '<div class="path">' + node.split('/').slice(-4).join('/') + '</div>' +
+    '<div class="row"><span>Imports: ' + deps + '</span><span>Dependents: ' + depees + '</span>' +
+    (inCycle ? '<span class="pill pill-red">In cycle</span>' : '') + '</div>';
+  panel.style.display = 'block';
+}
+function onLeaveNode() { document.getElementById('hover-panel').style.display = 'none'; }
+function onClickNode({node}) {
+  document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
+  document.querySelector('[data-view="file"]').classList.add('active');
+  showFileView(node);
 }
 
 let currentView = 'graph';
