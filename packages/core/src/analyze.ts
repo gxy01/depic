@@ -48,9 +48,6 @@ export async function analyze(options: AnalyzeOptions): Promise<DependencyGraph>
     }
   }
 
-  // 3.5 检测 monorepo 包结构
-  const pkgMap = buildPackageMap(discovered);
-
   // 4. 单趟遍历：建 FileNode + 解析 import + 建 Edge + 填充 resolved info
   for (const [filePath, parsed] of parsedCache) {
     const resolvedInfos: ImportInfo[] = [];
@@ -111,7 +108,6 @@ export async function analyze(options: AnalyzeOptions): Promise<DependencyGraph>
     const node: FileNode = {
       kind: 'file',
       id: filePath,
-      package: pkgMap.get(filePath),
       exports: parsed.exports.map((e) => ({
         ...e,
         kind: e.kind as FileNode['exports'][number]['kind'],
@@ -119,6 +115,15 @@ export async function analyze(options: AnalyzeOptions): Promise<DependencyGraph>
       imports: resolvedInfos,
     };
     graph.addFileNode(node);
+  }
+
+  // 5. 补全 package 信息（对所有文件，包括 addMissingFile 添加的）
+  const allFilePaths = graph.files().map((f) => f.id);
+  const pkgMap = buildPackageMap(allFilePaths);
+  for (const fileNode of graph.files()) {
+    if (pkgMap.has(fileNode.id)) {
+      graph.addFileNode({ ...fileNode, package: pkgMap.get(fileNode.id) });
+    }
   }
 
   return graph;
@@ -190,17 +195,17 @@ function buildPackageMap(filePaths: string[]): Map<string, string | undefined> {
     while (true) {
       if (pkgCache.has(dir)) {
         const pkg = pkgCache.get(dir);
-        if (pkg?.name) result.set(filePath, pkg.name);
-        break;
-      }
-      try {
-        const raw = readFileSync(join(dir, 'package.json'), 'utf-8');
-        const pkg = JSON.parse(raw);
-        pkgCache.set(dir, pkg);
-        if (pkg.name) result.set(filePath, pkg.name);
-        break;
-      } catch {
-        pkgCache.set(dir, null);
+        if (pkg?.name) { result.set(filePath, pkg.name); break; }
+        // cached null → continue walking up
+      } else {
+        try {
+          const raw = readFileSync(join(dir, 'package.json'), 'utf-8');
+          const pkg = JSON.parse(raw);
+          pkgCache.set(dir, pkg);
+          if (pkg.name) { result.set(filePath, pkg.name); break; }
+        } catch {
+          pkgCache.set(dir, null);
+        }
       }
       const parent = dirname(dir);
       if (parent === dir) break;
