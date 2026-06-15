@@ -45,6 +45,11 @@ export function Toolbar({ tab, onTabChange, currentPkg, onPkgChange, pkgNames, d
             placeholder="Search files…"
             onFocus={() => setOpen(true)}
             onBlur={() => setTimeout(() => setOpen(false), 200)}
+            onValueChange={(v) => {
+              // Auto-scroll list to top when query changes
+              const list = document.querySelector('[cmdk-list]');
+              if (list) list.scrollTop = 0;
+            }}
           />
           <Command.List style={{
             position:'absolute',top:'100%',left:0,right:0,

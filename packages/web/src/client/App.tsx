@@ -13,7 +13,7 @@ export default function App() {
   const cycleSet = useMemo(() => detectCycles(data), [data]);
   const pkgNames = useMemo(() => getPackageNames(data), [data]);
 
-  const [tab, setTab] = useState<Tab>('graph');
+  const [tab, setTab] = useState<Tab>('tree');
   const [search, setSearch] = useState('');
   const [currentPkg, setCurrentPkg] = useState('');
   const [selectedFile, setSelectedFile] = useState<string | null>(null);
@@ -50,7 +50,6 @@ export default function App() {
     setHighlightedFile(file);
     setTab('tree');
     requestAnimationFrame(() => scrollToFileRef.current?.(file));
-    setTimeout(() => setHighlightedFile(null), 3000);
   }, []);
 
   return (
