@@ -1,6 +1,6 @@
 import { readFileSync, readdirSync } from 'node:fs';
 import type { Dirent } from 'node:fs';
-import { join } from 'node:path';
+import { join, dirname } from 'node:path';
 import { parseFile } from './parser/index.js';
 import { Resolver } from './resolver/index.js';
 import { DependencyGraph } from './graph/index.js';
@@ -47,6 +47,9 @@ export async function analyze(options: AnalyzeOptions): Promise<DependencyGraph>
       // 文件无法解析，跳过
     }
   }
+
+  // 3.5 检测 monorepo 包结构
+  const pkgMap = buildPackageMap(discovered);
 
   // 4. 单趟遍历：建 FileNode + 解析 import + 建 Edge + 填充 resolved info
   for (const [filePath, parsed] of parsedCache) {
@@ -108,6 +111,7 @@ export async function analyze(options: AnalyzeOptions): Promise<DependencyGraph>
     const node: FileNode = {
       kind: 'file',
       id: filePath,
+      package: pkgMap.get(filePath),
       exports: parsed.exports.map((e) => ({
         ...e,
         kind: e.kind as FileNode['exports'][number]['kind'],
@@ -175,6 +179,34 @@ function discoverFiles(root: string, regexes: RegExp[]): string[] {
   }
 
   walk(root);
+  return result;
+}
+
+function buildPackageMap(filePaths: string[]): Map<string, string | undefined> {
+  const pkgCache = new Map<string, { name?: string } | null>();
+  const result = new Map<string, string | undefined>();
+  for (const filePath of filePaths) {
+    let dir = dirname(filePath);
+    while (true) {
+      if (pkgCache.has(dir)) {
+        const pkg = pkgCache.get(dir);
+        if (pkg?.name) result.set(filePath, pkg.name);
+        break;
+      }
+      try {
+        const raw = readFileSync(join(dir, 'package.json'), 'utf-8');
+        const pkg = JSON.parse(raw);
+        pkgCache.set(dir, pkg);
+        if (pkg.name) result.set(filePath, pkg.name);
+        break;
+      } catch {
+        pkgCache.set(dir, null);
+      }
+      const parent = dirname(dir);
+      if (parent === dir) break;
+      dir = parent;
+    }
+  }
   return result;
 }
 
