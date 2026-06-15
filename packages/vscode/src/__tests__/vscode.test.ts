@@ -58,7 +58,7 @@ describe('VS Code extension logic', () => {
     const html = generateHtmlFromGraph(graph, 'Workspace');
 
     expect(html).toContain('<!DOCTYPE html>');
-    expect(html).toContain('vis-network');
-    expect(html).toContain('Workspace — Dependency Graph');
+    expect(html).toContain('__GRAPH__');
+    expect(html).toContain('depic');
   });
 });

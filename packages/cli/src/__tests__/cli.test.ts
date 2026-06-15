@@ -83,6 +83,6 @@ describe('CLI commands', () => {
     const { readFileSync } = require('node:fs');
     const content = readFileSync(outFile, 'utf-8');
     expect(content).toContain('<!DOCTYPE html>');
-    expect(content).toContain('vis-network');
+    expect(content).toContain('__GRAPH__');
   });
 });

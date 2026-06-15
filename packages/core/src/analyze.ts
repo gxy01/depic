@@ -1,6 +1,6 @@
 import { readFileSync, readdirSync } from 'node:fs';
 import type { Dirent } from 'node:fs';
-import { join } from 'node:path';
+import { join, dirname } from 'node:path';
 import { parseFile } from './parser/index.js';
 import { Resolver } from './resolver/index.js';
 import { DependencyGraph } from './graph/index.js';
@@ -117,6 +117,15 @@ export async function analyze(options: AnalyzeOptions): Promise<DependencyGraph>
     graph.addFileNode(node);
   }
 
+  // 5. 补全 package 信息（对所有文件，包括 addMissingFile 添加的）
+  const allFilePaths = graph.files().map((f) => f.id);
+  const pkgMap = buildPackageMap(allFilePaths);
+  for (const fileNode of graph.files()) {
+    if (pkgMap.has(fileNode.id)) {
+      graph.addFileNode({ ...fileNode, package: pkgMap.get(fileNode.id) });
+    }
+  }
+
   return graph;
 }
 
@@ -175,6 +184,34 @@ function discoverFiles(root: string, regexes: RegExp[]): string[] {
   }
 
   walk(root);
+  return result;
+}
+
+function buildPackageMap(filePaths: string[]): Map<string, string | undefined> {
+  const pkgCache = new Map<string, { name?: string } | null>();
+  const result = new Map<string, string | undefined>();
+  for (const filePath of filePaths) {
+    let dir = dirname(filePath);
+    while (true) {
+      if (pkgCache.has(dir)) {
+        const pkg = pkgCache.get(dir);
+        if (pkg?.name) { result.set(filePath, pkg.name); break; }
+        // cached null → continue walking up
+      } else {
+        try {
+          const raw = readFileSync(join(dir, 'package.json'), 'utf-8');
+          const pkg = JSON.parse(raw);
+          pkgCache.set(dir, pkg);
+          if (pkg.name) { result.set(filePath, pkg.name); break; }
+        } catch {
+          pkgCache.set(dir, null);
+        }
+      }
+      const parent = dirname(dir);
+      if (parent === dir) break;
+      dir = parent;
+    }
+  }
   return result;
 }
 

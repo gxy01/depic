@@ -2,7 +2,7 @@ import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import { mkdtempSync, writeFileSync, rmSync } from 'node:fs';
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
-import { analyze } from '@depic/core';
+import { analyze, DependencyGraph } from '@depic/core';
 import { generateHtmlFromGraph, generateHtml } from '../index';
 
 describe('Web visualization', () => {
@@ -24,50 +24,39 @@ describe('Web visualization', () => {
     const html = generateHtmlFromGraph(graph, 'test');
 
     expect(html).toContain('<!DOCTYPE html>');
-    expect(html).toContain('<title>test — Dependency Graph</title>');
-    // Uses sigma.js + graphology for WebGL rendering
-    expect(html).toContain('sigma@');
-    expect(html).toContain('graphology');
-    // Should contain graph data
+    expect(html).toContain('__GRAPH__');
     expect(html).toContain('"nodes"');
     expect(html).toContain('"edges"');
-    // Should have three view tabs
-    expect(html).toContain('data-view="graph"');
-    expect(html).toContain('data-view="tree"');
-    expect(html).toContain('data-view="file"');
-    // Should have interactive features
-    expect(html).toContain('switchView');
-    expect(html).toContain('showFileView');
-    expect(html).toContain('buildTree');
+    // Vite-built React app with tabs
+    expect(html).toContain('id="root"');
   });
 
-  it('generateHtmlFromGraph escapes HTML in title', async () => {
+  it('generateHtmlFromGraph embeds full graph data', async () => {
     const graph = await analyze({ root: tmpDir });
-    const html = generateHtmlFromGraph(graph, '<script>alert(1)</script>');
+    const html = generateHtmlFromGraph(graph, 'test');
 
-    expect(html).not.toContain('<script>alert(1)</script>');
-    expect(html).toContain('&lt;script&gt;');
+    expect(html).toContain(join(tmpDir, 'a.ts'));
+    expect(html).toContain(join(tmpDir, 'b.ts'));
+    expect(html).toContain(join(tmpDir, 'c.ts'));
+  });
+
+  it('generateHtmlFromGraph handles empty graph', () => {
+    const g = new DependencyGraph();
+    const html = generateHtmlFromGraph(g, 'empty');
+
+    expect(html).toContain('<!DOCTYPE html>');
+    expect(html).toContain('"nodes":[]');
+    expect(html).toContain('"edges":[]');
   });
 
   it('generateHtml produces HTML from directory', async () => {
     const html = await generateHtml(tmpDir);
 
     expect(html).toContain('<!DOCTYPE html>');
-    expect(html).toContain('sigma@');
-    expect(html).toContain('graphology');
+    expect(html).toContain('__GRAPH__');
   });
 
-  it('HTML contains all file nodes', async () => {
-    const graph = await analyze({ root: tmpDir });
-    const html = generateHtmlFromGraph(graph, 'test');
-
-    // Check that each file appears in the embedded JSON
-    expect(html).toContain(join(tmpDir, 'a.ts'));
-    expect(html).toContain(join(tmpDir, 'b.ts'));
-    expect(html).toContain(join(tmpDir, 'c.ts'));
-  });
-
-  it('HTML contains external nodes', async () => {
+  it('Html contains external node data', async () => {
     const graph = await analyze({ root: tmpDir });
     const html = generateHtmlFromGraph(graph, 'test');
 
@@ -75,16 +64,10 @@ describe('Web visualization', () => {
     expect(html).toContain('"kind":"external"');
   });
 
-  it('generateHtmlFromGraph with empty graph produces valid HTML', async () => {
-    const { DependencyGraph } = await import('@depic/core');
-    const g = new DependencyGraph();
-    const html = generateHtmlFromGraph(g, 'empty');
-
-    expect(html).toContain('<!DOCTYPE html>');
-    expect(html).toContain('sigma@');
-    expect(html).toContain('graphology');
-    // Should contain empty node/edge arrays
-    expect(html).toContain('"nodes":[]');
-    expect(html).toContain('"edges":[]');
+  it('generateHtml does not include page title in output', async () => {
+    // Old test checked for title; new shell has fixed title "depic"
+    const graph = await analyze({ root: tmpDir });
+    const html = generateHtmlFromGraph(graph, 'irrelevant');
+    expect(html).toContain('<title>depic');
   });
 });

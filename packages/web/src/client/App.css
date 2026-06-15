@@ -1,0 +1,64 @@
+:root{--bg:#0d1117;--surface:#161b22;--border:#30363d;--text:#c9d1d9;--muted:#8b949e;--accent:#58a6ff;--red:#f85149;--orange:#d2991d;--green:#3fb950}
+*{margin:0;padding:0;box-sizing:border-box}
+body{background:var(--bg);color:var(--text);overflow:hidden}
+.app{height:100vh;display:flex;flex-direction:column}
+
+/* Toolbar */
+.toolbar{display:flex;align-items:center;gap:10px;padding:6px 14px;background:var(--surface);border-bottom:1px solid var(--border);flex-shrink:0;flex-wrap:wrap}
+.toolbar h1{font-size:14px;font-weight:600;white-space:nowrap}
+.tabs{display:flex;gap:0}
+.tab-btn{padding:5px 12px;font-size:12px;border:1px solid var(--border);background:var(--bg);color:var(--muted);cursor:pointer;transition:all .15s}
+.tab-btn:first-child{border-radius:5px 0 0 5px}
+.tab-btn:last-child{border-radius:0 5px 5px 0}
+.tab-btn.active,.tab-btn:active{background:var(--accent);color:#fff;border-color:var(--accent)}
+.tab-btn:hover:not(.active){color:var(--text)}
+.search-input{flex:1;max-width:260px;padding:5px 10px;border-radius:5px;border:1px solid var(--border);background:var(--bg);color:var(--text);font-size:12px;outline:none}
+.search-input:focus{border-color:var(--accent)}
+.pkg-select{padding:5px 8px;border-radius:5px;border:1px solid var(--border);background:var(--bg);color:var(--text);font-size:12px;max-width:180px}
+.stats{font-size:11px;color:var(--muted);white-space:nowrap}
+.pill{display:inline-block;padding:1px 7px;border-radius:9px;font-size:10px;font-weight:600;margin-left:3px}
+.pill-green{background:#3fb95022;color:var(--green)}
+.pill-orange{background:#d2991d22;color:var(--orange)}
+.pill-red{background:#f8514922;color:var(--red)}
+.pill-blue{background:#58a6ff22;color:var(--accent)}
+.legend{display:flex;gap:10px;font-size:10px;align-items:center;margin-left:auto}
+.legend-dot{width:7px;height:7px;border-radius:50%;display:inline-block;margin-right:3px;vertical-align:middle}
+
+/* Content */
+.content{flex:1;overflow:hidden;position:relative}
+
+/* GraphView */
+.graph-container{width:100%;height:100%;background:var(--bg);position:relative}
+.graph-container svg{display:block}
+.hover-panel{position:absolute;bottom:12px;left:50%;transform:translateX(-50%);background:var(--surface);border:1px solid var(--border);border-radius:8px;padding:8px 14px;font-size:12px;z-index:10;pointer-events:none}
+.hover-panel .path{color:var(--accent);font-family:monospace;font-size:11px;word-break:break-all}
+.hover-panel .row{display:flex;gap:16px;margin-top:2px;font-size:11px;color:var(--muted)}
+
+/* TreeView */
+.tree-container{height:100%;overflow:hidden}
+.tree-row{padding:4px 0;font-family:monospace;font-size:12px;cursor:pointer;white-space:nowrap;display:flex;align-items:center}
+.tree-row:hover{background:var(--surface)}
+.tree-row .toggle{width:16px;text-align:center;color:var(--muted);cursor:pointer;flex-shrink:0;user-select:none}
+.tree-row .name{color:var(--accent);flex-shrink:0}
+.tree-row .spec{color:var(--muted);margin-left:6px;font-size:11px}
+.tree-row .cycle-link{color:var(--orange);margin-left:6px;cursor:pointer;text-decoration:underline;font-size:11px}
+.tree-row .tag{font-size:9px;padding:0 4px;border-radius:3px;margin-left:4px}
+.tree-row .tag-ext{color:var(--orange);background:#d2991d22}
+.tree-row .tag-cycle{color:var(--red);background:#f8514922}
+
+/* FileView */
+.file-view{height:100%;overflow-y:auto;padding:16px}
+.file-view h2{font-size:18px;font-family:monospace;color:var(--accent);word-break:break-all;margin-bottom:4px}
+.file-view .section{margin-top:20px}
+.file-view .section h3{font-size:14px;margin-bottom:8px;padding-bottom:4px;border-bottom:1px solid var(--border)}
+.file-row{display:flex;justify-content:space-between;align-items:center;padding:5px 10px;font-family:monospace;font-size:12px;border-bottom:1px solid var(--border);cursor:pointer}
+.file-row:hover{background:var(--surface)}
+.file-row .spec{color:var(--muted);margin-left:8px}
+.kind-tag{font-size:9px;padding:1px 5px;border-radius:3px;margin-left:6px}
+.kind-static-import{background:#58a6ff22;color:var(--accent)}
+.kind-dynamic-import{background:#d2991d22;color:var(--orange)}
+.kind-re-export{background:#3fb95022;color:var(--green)}
+.kind-css-import{background:#d2991d22;color:var(--orange)}
+.kind-asset-import{background:#8b949e22;color:var(--muted)}
+.kind-external{background:var(--orange);color:#fff}
+.empty-state{padding:40px;text-align:center;color:var(--muted);font-size:14px}

@@ -9,10 +9,8 @@
         "--extensionDevelopmentPath=${workspaceFolder}/packages/vscode",
         "${input:targetFolder}"
       ],
-      "preLaunchTask": "Build extension",
-      "outFiles": [
-        "${workspaceFolder}/packages/vscode/dist/**/*.js"
-      ]
+      "preLaunchTask": "Build all",
+      "outFiles": ["${workspaceFolder}/packages/vscode/dist/**/*.js"]
     },
     {
       "name": "Run Extension (current project)",
@@ -22,10 +20,8 @@
         "--extensionDevelopmentPath=${workspaceFolder}/packages/vscode",
         "${workspaceFolder}"
       ],
-      "preLaunchTask": "Build extension",
-      "outFiles": [
-        "${workspaceFolder}/packages/vscode/dist/**/*.js"
-      ]
+      "preLaunchTask": "Build all",
+      "outFiles": ["${workspaceFolder}/packages/vscode/dist/**/*.js"]
     }
   ],
   "inputs": [
