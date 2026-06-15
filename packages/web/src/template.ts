@@ -104,7 +104,7 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;backgrou
 <script>
 const RAW = ${graphJson};
 // Build graphology graph
-const G = new graphology.Graph();
+const G = new graphology.Graph({multi: true});
 const cycleSet = new Set();
 
 // Detect cycles
