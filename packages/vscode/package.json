@@ -17,7 +17,8 @@
     "onCommand:depic.analyze",
     "onCommand:depic.cycles",
     "onCommand:depic.dependents",
-    "onCommand:depic.stats"
+    "onCommand:depic.stats",
+    "onCommand:depic.refresh"
   ],
   "main": "./dist/extension.js",
   "contributes": {
@@ -37,6 +38,10 @@
       {
         "command": "depic.stats",
         "title": "Depic: Show Dependency Statistics"
+      },
+      {
+        "command": "depic.refresh",
+        "title": "Depic: Refresh Analysis Cache"
       }
     ]
   },
@@ -48,6 +53,8 @@
     "test:run": "vitest run"
   },
   "dependencies": {
+    "@depic/core": "workspace:*",
+    "@depic/web": "workspace:*",
     "@swc/core": "^1.11.0"
   },
   "devDependencies": {

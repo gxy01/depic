@@ -337,10 +337,13 @@ export function parseFile(
     return { filePath, imports, exports };
   }
 
+  const isTsx = filePath.endsWith('.tsx');
+  const isJsx = filePath.endsWith('.jsx');
   const ast: Module = parseSync(source, {
     syntax: 'typescript',
     target: 'es2022',
     comments: false,
+    tsx: isTsx || isJsx,
   });
 
   for (const stmt of ast.body) {

@@ -4,6 +4,8 @@ import type { SourceLocation, ImportedSymbol } from '../parser/index.js';
 export interface FileNode {
   kind: 'file';
   id: string;
+  /** 所属 monorepo 子包名（从最近的 package.json 读取 name），无则为 undefined */
+  package?: string;
   exports: ExportInfo[];
   imports: ImportInfo[];
 }
