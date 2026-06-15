@@ -1,22 +1,73 @@
 import * as vscode from 'vscode';
-import { analyze } from '@depic/core';
+import { analyze, type DependencyGraph } from '@depic/core';
 import { generateHtmlFromGraph } from '@depic/web';
 
 let outputChannel: vscode.OutputChannel;
 
+/** 缓存的图实例，按 workspace root 索引 */
+const graphCache = new Map<string, { graph: DependencyGraph; timestamp: number }>();
+
+/** 获取或构建缓存的分析结果 */
+async function getCachedGraph(root: string): Promise<DependencyGraph> {
+  const cached = graphCache.get(root);
+  if (cached) return cached.graph;
+
+  const graph = await analyze({ root });
+  graphCache.set(root, { graph, timestamp: Date.now() });
+  return graph;
+}
+
+/** 使指定 workspace 的缓存失效 */
+function invalidateCache(root: string): void {
+  graphCache.delete(root);
+}
+
+/** 使所有缓存失效 */
+function invalidateAllCaches(): void {
+  graphCache.clear();
+}
+
 export function activate(context: vscode.ExtensionContext): void {
   outputChannel = vscode.window.createOutputChannel('Depic');
 
+  // 监听文件变化，自动失效缓存
+  const watcher = vscode.workspace.createFileSystemWatcher(
+    '**/*.{ts,tsx,js,jsx,json}',
+    false, // ignoreCreateEvents
+    false, // ignoreChangeEvents
+    false, // ignoreDeleteEvents
+  );
+  watcher.onDidChange((uri) => {
+    const root = vscode.workspace.getWorkspaceFolder(uri)?.uri.fsPath;
+    if (root) invalidateCache(root);
+  });
+  watcher.onDidCreate((uri) => {
+    const root = vscode.workspace.getWorkspaceFolder(uri)?.uri.fsPath;
+    if (root) invalidateCache(root);
+  });
+  watcher.onDidDelete((uri) => {
+    const root = vscode.workspace.getWorkspaceFolder(uri)?.uri.fsPath;
+    if (root) invalidateCache(root);
+  });
+
+  context.subscriptions.push(watcher);
+
+  // 注册命令
   context.subscriptions.push(
     vscode.commands.registerCommand('depic.analyze', showGraph),
     vscode.commands.registerCommand('depic.cycles', checkCycles),
     vscode.commands.registerCommand('depic.dependents', showDependents),
     vscode.commands.registerCommand('depic.stats', showStats),
+    vscode.commands.registerCommand('depic.refresh', async () => {
+      invalidateAllCaches();
+      vscode.window.showInformationMessage('Depic cache cleared. Next command will re-analyze.');
+    }),
   );
 }
 
 export function deactivate(): void {
   outputChannel?.dispose();
+  graphCache.clear();
 }
 
 async function getRoot(): Promise<string | undefined> {
@@ -35,7 +86,7 @@ async function showGraph(): Promise<void> {
   await vscode.window.withProgress(
     { location: vscode.ProgressLocation.Notification, title: 'Analyzing dependencies…' },
     async () => {
-      const graph = await analyze({ root });
+      const graph = await getCachedGraph(root);
       const html = generateHtmlFromGraph(graph, root.split('/').pop() ?? root);
 
       const panel = vscode.window.createWebviewPanel(
@@ -56,7 +107,7 @@ async function checkCycles(): Promise<void> {
   await vscode.window.withProgress(
     { location: vscode.ProgressLocation.Notification, title: 'Checking for circular dependencies…' },
     async () => {
-      const graph = await analyze({ root });
+      const graph = await getCachedGraph(root);
       const cycles = graph.getCircularDependencies();
 
       outputChannel.clear();
@@ -92,7 +143,7 @@ async function showDependents(): Promise<void> {
   await vscode.window.withProgress(
     { location: vscode.ProgressLocation.Notification, title: 'Finding dependents…' },
     async () => {
-      const graph = await analyze({ root });
+      const graph = await getCachedGraph(root);
       const dependents = graph.getDependents(filePath);
 
       outputChannel.clear();
@@ -118,7 +169,7 @@ async function showStats(): Promise<void> {
   await vscode.window.withProgress(
     { location: vscode.ProgressLocation.Notification, title: 'Computing statistics…' },
     async () => {
-      const graph = await analyze({ root });
+      const graph = await getCachedGraph(root);
       const stats = graph.stats();
 
       outputChannel.clear();
