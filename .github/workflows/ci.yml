@@ -23,8 +23,8 @@ jobs:
 
       - run: pnpm install --frozen-lockfile
 
-      - name: Build (rolldown)
-        run: pnpm exec rolldown -c rolldown.config.mjs
+      - name: Build
+        run: pnpm build
 
       - name: Lint
         run: pnpm -w run lint
