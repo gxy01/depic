@@ -5,6 +5,7 @@ import { existsSync, readFileSync, appendFileSync, writeFileSync } from 'node:fs
 import { join } from 'node:path';
 
 let outputChannel: vscode.OutputChannel;
+let extContext: vscode.ExtensionContext;
 
 /** 缓存的图实例，按 workspace root 索引 */
 const graphCache = new Map<string, { graph: DependencyGraph; timestamp: number }>();
@@ -31,6 +32,7 @@ function invalidateAllCaches(): void {
 }
 
 export function activate(context: vscode.ExtensionContext): void {
+  extContext = context;
   outputChannel = vscode.window.createOutputChannel('Depic');
 
   // 监听文件变化，自动失效缓存
@@ -113,15 +115,25 @@ async function showGraph(): Promise<void> {
         'depicGraph',
         'Dependency Graph',
         vscode.ViewColumn.Beside,
-        { enableScripts: true, retainContextWhenHidden: true },
+        {
+          enableScripts: true,
+          retainContextWhenHidden: true,
+          localResourceRoots: [vscode.Uri.joinPath(extContext.storageUri ?? extContext.globalStorageUri, '..')],
+        },
       );
-      // Inject CSP nonce into script tag for VS Code webview compatibility
-      const nonce = (panel.webview as any).cspSource ?? '';
-      const withNonce = html.replace(
-        '<script>',
-        `<script nonce="${nonce}">`,
-      );
-      panel.webview.html = withNonce;
+
+      // Write HTML to temp file and load via webview URI to bypass CSP inline-script blocking
+      const tmpDir = vscode.Uri.joinPath(extContext.globalStorageUri, 'depic');
+      try { await vscode.workspace.fs.createDirectory(tmpDir); } catch {}
+      const htmlFile = vscode.Uri.joinPath(tmpDir, 'graph.html');
+      await vscode.workspace.fs.writeFile(htmlFile, Buffer.from(html, 'utf-8'));
+      const webviewUri = panel.webview.asWebviewUri(htmlFile);
+
+      panel.webview.html = `<!DOCTYPE html>
+<html style="margin:0;padding:0;overflow:hidden;height:100vh">
+<body style="margin:0;padding:0;overflow:hidden;height:100vh">
+<iframe src="${webviewUri}" style="width:100%;height:100%;border:none" sandbox="allow-scripts allow-same-origin"></iframe>
+</body></html>`;
     },
   );
 }
