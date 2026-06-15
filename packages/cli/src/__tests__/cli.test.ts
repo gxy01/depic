@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeEach, afterEach } from 'vitest';
-import { mkdtempSync, writeFileSync, mkdirSync, rmSync } from 'node:fs';
+import { mkdtempSync, writeFileSync, mkdirSync, rmSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
 import { runAnalyze, runCycles, runDependents, runStats, runWeb } from '../index';
@@ -80,7 +80,6 @@ describe('CLI commands', () => {
 
     expect(output).toContain('Written to');
     // File should exist and contain HTML
-    const { readFileSync } = require('node:fs');
     const content = readFileSync(outFile, 'utf-8');
     expect(content).toContain('<!DOCTYPE html>');
     expect(content).toContain('__GRAPH__');

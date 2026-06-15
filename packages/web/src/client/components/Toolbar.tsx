@@ -1,4 +1,5 @@
-import React, { useState, useMemo, useRef, useEffect } from 'react';
+import React, { useState, useMemo } from 'react';
+import { Command } from 'cmdk';
 import type { DependencyGraphJSON } from '../data';
 
 interface FileName { id: string; pkg: string; }
@@ -17,29 +18,8 @@ interface Props {
   onSearchSelect: (f: string) => void;
 }
 
-export function Toolbar({ tab, onTabChange, search, onSearchChange, currentPkg, onPkgChange, pkgNames, data, cycleCount, fileNames, onSearchSelect }: Props) {
-  const [focus, setFocus] = useState(false);
-  const inputRef = useRef<HTMLInputElement>(null);
-  const dropdownRef = useRef<HTMLDivElement>(null);
-
-  const matches = useMemo(() => {
-    if (!search) return [];
-    const q = search.toLowerCase();
-    return fileNames.filter(f => f.id.toLowerCase().includes(q)).slice(0, 20);
-  }, [search, fileNames]);
-
-  const showDropdown = focus && search.length > 0 && matches.length > 0;
-
-  useEffect(() => {
-    function onClick(e: MouseEvent) {
-      if (dropdownRef.current && !dropdownRef.current.contains(e.target as Node) &&
-          inputRef.current && !inputRef.current.contains(e.target as Node)) {
-        setFocus(false);
-      }
-    }
-    document.addEventListener('mousedown', onClick);
-    return () => document.removeEventListener('mousedown', onClick);
-  }, []);
+export function Toolbar({ tab, onTabChange, currentPkg, onPkgChange, pkgNames, data, cycleCount, fileNames, onSearchSelect }: Props) {
+  const [open, setOpen] = useState(false);
 
   const fileCount = data.nodes.filter(n => n.kind === 'file').length;
   const extCount = data.nodes.filter(n => n.kind === 'external').length;
@@ -60,31 +40,49 @@ export function Toolbar({ tab, onTabChange, search, onSearchChange, currentPkg, 
         {pkgNames.map(p => <option key={p} value={p}>{p}</option>)}
       </select>
       <div style={{position:'relative',flex:1,maxWidth:320}}>
-        <input
-          ref={inputRef}
-          className="search-input"
-          type="text"
-          placeholder="Search files…"
-          value={search}
-          onChange={e => onSearchChange(e.target.value)}
-          onFocus={() => setFocus(true)}
-          style={{width:'100%'}}
-        />
-        {showDropdown && (
-          <div ref={dropdownRef} className="search-dropdown">
-            {matches.map(f => (
-              <div
-                key={f.id}
-                className="search-dropdown-item"
-                onMouseDown={e => { e.preventDefault(); onSearchSelect(f.id); setFocus(false); }}
-              >
-                <span className="name">{f.id.split('/').pop()}</span>
-                <span className="path">{f.id.split('/').slice(-3).join('/')}</span>
-                {f.pkg && <span className="tag-pkg">{f.pkg}</span>}
-              </div>
-            ))}
-          </div>
-        )}
+        <Command shouldFilter={false} label="Search files">
+          <Command.Input
+            placeholder="Search files…"
+            onFocus={() => setOpen(true)}
+            onBlur={() => setTimeout(() => setOpen(false), 200)}
+            onValueChange={() => setOpen(true)}
+          />
+          {open && (
+            <Command.List style={{
+              position:'absolute',top:'100%',left:0,right:0,
+              background:'var(--surface)',border:'1px solid var(--border)',
+              borderRadius:'6px',maxHeight:300,overflowY:'auto',zIndex:100,
+              marginTop:4,boxShadow:'0 4px 12px rgba(0,0,0,.4)',padding:4,
+            }}>
+              <Command.Empty style={{padding:12,textAlign:'center',color:'var(--muted)',fontSize:12}}>
+                No files found
+              </Command.Empty>
+              {fileNames.slice(0, 30).map(f => (
+                <Command.Item
+                  key={f.id}
+                  value={f.id}
+                  onSelect={() => { onSearchSelect(f.id); setOpen(false); }}
+                  style={{
+                    display:'flex',alignItems:'center',gap:8,padding:'6px 10px',
+                    cursor:'pointer',fontSize:12,borderRadius:4,
+                  }}
+                >
+                  <span style={{color:'var(--accent)',fontFamily:'monospace',fontWeight:600,whiteSpace:'nowrap'}}>
+                    {f.id.split('/').pop()}
+                  </span>
+                  <span style={{color:'var(--muted)',fontFamily:'monospace',fontSize:11,flex:1,overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}}>
+                    {f.id.split('/').slice(-3).join('/')}
+                  </span>
+                  {f.pkg && (
+                    <span style={{fontSize:9,padding:'1px 5px',borderRadius:3,background:'#58a6ff22',color:'var(--accent)',whiteSpace:'nowrap'}}>
+                      {f.pkg}
+                    </span>
+                  )}
+                </Command.Item>
+              ))}
+            </Command.List>
+          )}
+        </Command>
       </div>
       <div className="stats">
         <span className="pill pill-green">{fileCount} files</span>

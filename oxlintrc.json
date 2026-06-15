@@ -1,0 +1,5 @@
+{
+  "rules": {
+    "typescript/no-require-imports": "error"
+  }
+}
