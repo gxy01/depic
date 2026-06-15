@@ -24,6 +24,14 @@ body{background:var(--bg);color:var(--text);overflow:hidden}
 .legend{display:flex;gap:10px;font-size:10px;align-items:center;margin-left:auto}
 .legend-dot{width:7px;height:7px;border-radius:50%;display:inline-block;margin-right:3px;vertical-align:middle}
 
+/* Search dropdown */
+.search-dropdown{position:absolute;top:100%;left:0;right:0;background:var(--surface);border:1px solid var(--border);border-radius:6px;max-height:300px;overflow-y:auto;z-index:100;margin-top:4px;box-shadow:0 4px 12px rgba(0,0,0,.4)}
+.search-dropdown-item{display:flex;align-items:center;gap:8px;padding:6px 10px;cursor:pointer;font-size:12px;border-bottom:1px solid var(--border)}
+.search-dropdown-item:hover,.search-dropdown-item.active{background:#1a3a5c}
+.search-dropdown-item .name{color:var(--accent);font-family:monospace;font-weight:600;white-space:nowrap}
+.search-dropdown-item .path{color:var(--muted);font-family:monospace;font-size:11px;flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.search-dropdown-item .tag-pkg{font-size:9px;padding:1px 5px;border-radius:3px;background:#58a6ff22;color:var(--accent);white-space:nowrap}
+
 /* Content */
 .content{flex:1;overflow:hidden;position:relative}
 

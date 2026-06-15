@@ -1,4 +1,4 @@
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useRef, useCallback } from 'react';
 import { getData, detectCycles, getPackageNames } from './data';
 import type { DependencyGraphJSON } from './data';
 import { Toolbar } from './components/Toolbar';
@@ -17,6 +17,12 @@ export default function App() {
   const [search, setSearch] = useState('');
   const [currentPkg, setCurrentPkg] = useState('');
   const [selectedFile, setSelectedFile] = useState<string | null>(null);
+  const scrollToFileRef = useRef<((f: string) => void) | null>(null);
+
+  const fileNames = useMemo(
+    () => data.nodes.filter(n => n.kind === 'file').map(n => ({ id: n.id, pkg: n.package ?? '' })),
+    [data],
+  );
 
   const filteredData: DependencyGraphJSON = useMemo(() => {
     if (!currentPkg) return data;
@@ -27,15 +33,22 @@ export default function App() {
       n => !currentPkg || n.kind === 'external' || n.package === currentPkg || pkgFileIds.has(n.id),
     );
     const visibleEdges = data.edges.filter(
-      e => pkgFileIds.has(e.source) || pkgFileIds.has(e.target) || (data.nodes.find(n => n.id === e.source)?.kind === 'external') || (data.nodes.find(n => n.id === e.target)?.kind === 'external'),
+      e => pkgFileIds.has(e.source) || pkgFileIds.has(e.target),
     );
     return { nodes: visibleNodes, edges: visibleEdges };
   }, [data, currentPkg]);
 
-  const handleSelectFile = (file: string) => {
+  const handleSelectFile = useCallback((file: string) => {
     setSelectedFile(file);
     setTab('file');
-  };
+  }, []);
+
+  const handleSearchSelect = useCallback((file: string) => {
+    setSearch('');
+    setTab('tree');
+    // Defer scroll until tree renders
+    requestAnimationFrame(() => scrollToFileRef.current?.(file));
+  }, []);
 
   return (
     <div className="app">
@@ -49,6 +62,8 @@ export default function App() {
         pkgNames={pkgNames}
         data={filteredData}
         cycleCount={cycleSet.size}
+        fileNames={fileNames}
+        onSearchSelect={handleSearchSelect}
       />
       <div className="content">
         {tab === 'graph' && (
@@ -66,6 +81,7 @@ export default function App() {
             cycleSet={cycleSet}
             search={search}
             onSelectFile={handleSelectFile}
+            scrollToFileRef={scrollToFileRef}
           />
         )}
         {tab === 'file' && (
