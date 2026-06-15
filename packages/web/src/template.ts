@@ -422,7 +422,7 @@ function switchView(view) {
   document.getElementById('file-view').classList.toggle('active', view === 'file');
   document.querySelectorAll('.tab').forEach(t => t.classList.toggle('active', t.dataset.view === view));
   if (view === 'graph' && !sigmaInstance) initGraph();
-  if (view === 'tree' && document.getElementById('tree-view').children.length === 0) initTree();
+  if (view === 'tree') initTree();
 }
 document.querySelectorAll('.tab').forEach(tab => {
   tab.addEventListener('click', () => switchView(tab.dataset.view));
