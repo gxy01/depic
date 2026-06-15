@@ -1,62 +1,62 @@
 import { describe, it } from 'vitest';
-import { mkdtempSync, writeFileSync, rmSync } from 'node:fs';
+import { execSync } from 'node:child_process';
+import { existsSync, rmSync } from 'node:fs';
+import { mkdir, writeFile, readFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
 import { analyze } from '../analyze';
 
-function generateProject(dir: string, fileCount: number): void {
-  for (let i = 0; i < fileCount; i++) {
-    const lines: string[] = [];
-    if (i + 1 < fileCount) {
-      lines.push(`import { x${i + 1} } from './a${i + 1}';`);
-    }
-    if (i % 10 === 0) {
-      lines.push(`import React from 'react';`);
-    }
-    lines.push(`export const x${i} = ${i};`);
-    writeFileSync(join(dir, `a${i}.ts`), lines.join('\n'));
+const RUN = process.env.RUN_BENCH === '1';
+const FIXTURE_DIR = process.env.BENCH_FIXTURE ?? join(tmpdir(), 'depic-bench-nextjs');
+const NEXTJS_REPO = 'https://github.com/vercel/next.js.git';
+
+/**
+ * 下载 benchmark fixture（如已存在则跳过）。
+ */
+async function ensureFixture(): Promise<string> {
+  if (!existsSync(FIXTURE_DIR)) {
+    console.log(`  Cloning next.js (depth=1) to ${FIXTURE_DIR} …`);
+    execSync(`git clone --depth=1 ${NEXTJS_REPO} ${FIXTURE_DIR}`, {
+      stdio: 'pipe',
+      timeout: 120_000,
+    });
+  } else {
+    console.log(`  Using cached fixture: ${FIXTURE_DIR}`);
   }
+  return FIXTURE_DIR;
 }
 
-const RUN = process.env.RUN_BENCH === '1';
-
 describe('benchmark', () => {
-  (RUN ? it : it.skip)('analyze performance: 100 files', async ({ expect }) => {
-    const dir = mkdtempSync(join(tmpdir(), 'depic-bench-'));
-    generateProject(dir, 100);
+  (RUN ? it : it.skip)(
+    'analyze next.js — full project with profiling',
+    { timeout: 300_000 },
+    async ({ expect }) => {
+      const root = await ensureFixture();
 
-    const start = performance.now();
-    const graph = await analyze({ root: dir });
-    const elapsed = performance.now() - start;
+      // Warm-up: 首次解析（无缓存）
+      console.log(`\n  Phase          │   Time   │  Count`);
+      console.log(`  ───────────────┼──────────┼───────`);
+      const graph = await analyze({ root });
 
-    console.log(`  100 files: ${elapsed.toFixed(0)}ms (${graph.files().length} files, ${graph.edges().length} edges)`);
-    expect(elapsed).toBeLessThan(2000);
-    rmSync(dir, { recursive: true, force: true });
-  });
+      const stats = graph.stats();
+      console.log(`  ───────────────┼──────────┼───────`);
+      console.log(
+        `  Total          │  (warm)  │  ${stats.fileCount} files, ${stats.edgeCount} edges, ${stats.externalCount} externals`,
+      );
 
-  (RUN ? it : it.skip)('analyze performance: 500 files', async ({ expect }) => {
-    const dir = mkdtempSync(join(tmpdir(), 'depic-bench-'));
-    generateProject(dir, 500);
+      // 第二次：测量稳态（OS page cache 热）
+      const t0 = performance.now();
+      const graph2 = await analyze({ root });
+      const elapsed = performance.now() - t0;
 
-    const start = performance.now();
-    const graph = await analyze({ root: dir });
-    const elapsed = performance.now() - start;
+      console.log(`  Total (2nd)    │  ${elapsed.toFixed(0).padStart(6)}ms │  ${stats.fileCount} files`);
+      console.log('');
 
-    console.log(`  500 files: ${elapsed.toFixed(0)}ms (${graph.files().length} files, ${graph.edges().length} edges)`);
-    expect(elapsed).toBeLessThan(5000);
-    rmSync(dir, { recursive: true, force: true });
-  });
-
-  (RUN ? it : it.skip)('analyze performance: 1000 files', async ({ expect }) => {
-    const dir = mkdtempSync(join(tmpdir(), 'depic-bench-'));
-    generateProject(dir, 1000);
-
-    const start = performance.now();
-    const graph = await analyze({ root: dir });
-    const elapsed = performance.now() - start;
-
-    console.log(`  1000 files: ${elapsed.toFixed(0)}ms (${graph.files().length} files, ${graph.edges().length} edges)`);
-    expect(elapsed).toBeLessThan(10000);
-    rmSync(dir, { recursive: true, force: true });
-  });
+      // 基本健康检查
+      expect(stats.fileCount).toBeGreaterThan(1000);
+      expect(stats.edgeCount).toBeGreaterThan(1000);
+      expect(stats.externalCount).toBeGreaterThan(10);
+      expect(elapsed).toBeLessThan(30_000); // Next.js 应该在 30s 以内
+    },
+  );
 });
