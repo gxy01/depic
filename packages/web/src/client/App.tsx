@@ -43,10 +43,14 @@ export default function App() {
     setTab('file');
   }, []);
 
+  const [highlightedFile, setHighlightedFile] = useState<string | null>(null);
+
   const handleSearchSelect = useCallback((file: string) => {
     setSearch('');
+    setHighlightedFile(file);
     setTab('tree');
     requestAnimationFrame(() => scrollToFileRef.current?.(file));
+    setTimeout(() => setHighlightedFile(null), 3000);
   }, []);
 
   return (
@@ -81,6 +85,7 @@ export default function App() {
             search={search}
             onSelectFile={handleSelectFile}
             scrollToFileRef={scrollToFileRef}
+            highlightedFile={highlightedFile}
           />
         )}
         {tab === 'file' && (

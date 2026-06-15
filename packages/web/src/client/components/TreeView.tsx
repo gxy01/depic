@@ -8,6 +8,7 @@ interface Props {
   search: string;
   onSelectFile: (f: string) => void;
   scrollToFileRef: React.MutableRefObject<((f: string) => void) | null>;
+  highlightedFile: string | null;
 }
 
 interface FlatRow {
@@ -21,7 +22,7 @@ interface FlatRow {
   isExternal: boolean;
 }
 
-export function TreeView({ data, cycleSet, search, onSelectFile, scrollToFileRef }: Props) {
+export function TreeView({ data, cycleSet, search, onSelectFile, scrollToFileRef, highlightedFile }: Props) {
   const virtuosoRef = useRef<VirtuosoHandle>(null);
   const [expanded, setExpanded] = useState<Set<string>>(() => {
     const init = new Set<string>();
@@ -131,8 +132,9 @@ export function TreeView({ data, cycleSet, search, onSelectFile, scrollToFileRef
     const row = flatRows[index];
     if (!row) return null;
     const padLeft = 8 + row.depth * 20;
+    const isHighlighted = row.file === highlightedFile;
     return (
-      <div className="tree-row" style={{ paddingLeft: padLeft }}>
+      <div className={'tree-row' + (isHighlighted ? ' highlight' : '')} style={{ paddingLeft: padLeft }}>
         <span className="toggle" onClick={() => toggle(row.file)}>
           {row.hasChildren ? (row.isExpanded ? '▼' : '▶') : ' '}
         </span>
