@@ -26,7 +26,7 @@ describe('Web visualization', () => {
     expect(html).toContain('<!DOCTYPE html>');
     expect(html).toContain('<title>test — Dependency Graph</title>');
     // Uses sigma.js + graphology for WebGL rendering
-    expect(html).toContain('sigma.js');
+    expect(html).toContain('sigma@');
     expect(html).toContain('graphology');
     // Should contain graph data
     expect(html).toContain('"nodes"');
@@ -53,7 +53,7 @@ describe('Web visualization', () => {
     const html = await generateHtml(tmpDir);
 
     expect(html).toContain('<!DOCTYPE html>');
-    expect(html).toContain('sigma.js');
+    expect(html).toContain('sigma@');
     expect(html).toContain('graphology');
   });
 
@@ -81,7 +81,7 @@ describe('Web visualization', () => {
     const html = generateHtmlFromGraph(g, 'empty');
 
     expect(html).toContain('<!DOCTYPE html>');
-    expect(html).toContain('sigma.js');
+    expect(html).toContain('sigma@');
     expect(html).toContain('graphology');
     // Should contain empty node/edge arrays
     expect(html).toContain('"nodes":[]');

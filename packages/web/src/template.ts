@@ -5,7 +5,7 @@ export function renderHtml(graphJson: string, title: string): string {
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>${escapeHtml(title)} — Dependency Graph</title>
-<script src="https://unpkg.com/sigma.js@2.4.0/build/sigma.min.js"><\/script>
+<script src="https://unpkg.com/sigma@2.4.0/build/sigma.min.js"><\/script>
 <script src="https://unpkg.com/graphology@0.25.4/dist/graphology.umd.min.js"><\/script>
 <style>
 *{margin:0;padding:0;box-sizing:border-box}
