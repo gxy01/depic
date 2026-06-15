@@ -1,6 +1,6 @@
 import React, { useState, useMemo, useRef, useCallback } from 'react';
 import { getData, detectCycles, getPackageNames } from './data';
-import type { DependencyGraphJSON } from './data';
+import type { LightweightGraph } from './data';
 import { Toolbar } from './components/Toolbar';
 import { GraphView } from './components/GraphView';
 import { TreeView } from './components/TreeView';
@@ -24,13 +24,13 @@ export default function App() {
     [data],
   );
 
-  const filteredData: DependencyGraphJSON = useMemo(() => {
+  const filteredData: LightweightGraph = useMemo(() => {
     if (!currentPkg) return data;
     const pkgFileIds = new Set(
       data.nodes.filter(n => n.kind === 'file' && n.package === currentPkg).map(n => n.id),
     );
     const visibleNodes = data.nodes.filter(
-      n => !currentPkg || n.kind === 'external' || n.package === currentPkg || pkgFileIds.has(n.id),
+      n => n.kind === 'external' || n.package === currentPkg || pkgFileIds.has(n.id),
     );
     const visibleEdges = data.edges.filter(
       e => pkgFileIds.has(e.source) || pkgFileIds.has(e.target),
@@ -46,7 +46,6 @@ export default function App() {
   const handleSearchSelect = useCallback((file: string) => {
     setSearch('');
     setTab('tree');
-    // Defer scroll until tree renders
     requestAnimationFrame(() => scrollToFileRef.current?.(file));
   }, []);
 

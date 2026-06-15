@@ -1,6 +1,6 @@
 import React, { useState, useMemo } from 'react';
 import { Command } from 'cmdk';
-import type { DependencyGraphJSON } from '../data';
+import type { LightweightGraph } from '../data';
 
 interface FileName { id: string; pkg: string; }
 
@@ -12,7 +12,7 @@ interface Props {
   currentPkg: string;
   onPkgChange: (p: string) => void;
   pkgNames: string[];
-  data: DependencyGraphJSON;
+  data: LightweightGraph;
   cycleCount: number;
   fileNames: FileName[];
   onSearchSelect: (f: string) => void;

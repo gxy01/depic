@@ -33,8 +33,49 @@ export async function generateHtml(rootDir: string): Promise<string> {
  */
 export function generateHtmlFromGraph(graph: DependencyGraph, _title: string): string {
   const shell = getHtmlShell();
-  const json = JSON.stringify(graph.toJSON());
+  const json = JSON.stringify(toLightweightJSON(graph));
   return shell.replace('%%GRAPH_JSON%%', json);
+}
+
+/** 精简版序列化：仅含 Graph/Tree 需要的字段，大幅减小体积 */
+export function toLightweightJSON(graph: DependencyGraph): object {
+  const fileNodes = graph.files().map((f) => ({
+    kind: 'file' as const,
+    id: f.id,
+    package: f.package,
+  }));
+  const extNodes = graph.externalModules().map((e) => ({
+    kind: 'external' as const,
+    id: e.id,
+    package: undefined as string | undefined,
+  }));
+  return {
+    nodes: [...fileNodes, ...extNodes],
+    edges: graph.edges().map((e) => ({
+      source: e.source,
+      target: e.target,
+      kind: e.kind,
+      specifier: e.specifier,
+    })),
+  };
+}
+
+/** 获取单个文件的完整数据（按需，通过 postMessage 通信） */
+export function getFileDetails(graph: DependencyGraph, fileId: string): object | null {
+  const node = graph.getFileNode(fileId);
+  if (!node) return null;
+  return {
+    id: node.id,
+    package: node.package,
+    exports: node.exports,
+    imports: node.imports,
+    dependents: graph.getDependents(fileId).map((e) => ({
+      source: e.source,
+      kind: e.kind,
+      specifier: e.specifier,
+    })),
+    inCycle: graph.hasCycle(fileId),
+  };
 }
 
 /**

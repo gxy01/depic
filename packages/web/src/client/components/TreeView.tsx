@@ -1,9 +1,9 @@
 import React, { useMemo, useState, useCallback, useRef, useEffect } from 'react';
 import { Virtuoso, type VirtuosoHandle } from 'react-virtuoso';
-import type { DependencyGraphJSON } from '../data';
+import type { LightweightGraph } from '../data';
 
 interface Props {
-  data: DependencyGraphJSON;
+  data: LightweightGraph;
   cycleSet: Set<string>;
   search: string;
   onSelectFile: (f: string) => void;
@@ -158,7 +158,7 @@ export function TreeView({ data, cycleSet, search, onSelectFile, scrollToFileRef
 }
 
 /** Walk up edges to find all ancestors of a file */
-function findAncestors(file: string, data: DependencyGraphJSON): string[] {
+function findAncestors(file: string, data: LightweightGraph): string[] {
   const ancestors: string[] = [];
   const visited = new Set<string>();
   const queue = [file];

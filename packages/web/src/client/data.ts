@@ -1,29 +1,35 @@
 declare global {
-  interface Window { __GRAPH__?: DependencyGraphJSON }
+  interface Window { __GRAPH__?: LightweightGraph }
 }
 
-export interface GraphNode {
-  kind: 'file' | 'external' | 'symbol';
+export interface LightNode {
+  kind: 'file' | 'external';
   id: string;
   package?: string;
-  exports?: ExportInfo[];
-  imports?: ImportInfo[];
 }
 
-export interface Edge {
+export interface LightEdge {
   source: string;
   target: string;
   kind: string;
   specifier: string;
-  symbols?: ImportedSymbol[];
-  loc?: { line: number; column: number };
 }
 
-export interface ImportedSymbol {
-  imported: string;
-  local: string;
-  isTypeOnly?: boolean;
+export interface LightweightGraph {
+  nodes: LightNode[];
+  edges: LightEdge[];
 }
+
+export interface FileDetails {
+  id: string;
+  package?: string;
+  exports: ExportInfo[];
+  imports: ImportInfo[];
+  dependents: DepInfo[];
+  inCycle: boolean;
+}
+
+export interface DepInfo { source: string; kind: string; specifier: string; }
 
 export interface ExportInfo {
   name: string;
@@ -43,17 +49,18 @@ export interface ImportInfo {
   loc: { line: number; column: number };
 }
 
-export interface DependencyGraphJSON {
-  nodes: GraphNode[];
-  edges: Edge[];
+export interface ImportedSymbol {
+  imported: string;
+  local: string;
+  isTypeOnly?: boolean;
 }
 
-export function getData(): DependencyGraphJSON {
+export function getData(): LightweightGraph {
   return window.__GRAPH__ ?? { nodes: [], edges: [] };
 }
 
-/** 检测环（client-side） */
-export function detectCycles(data: DependencyGraphJSON): Set<string> {
+/** 检测环 */
+export function detectCycles(data: LightweightGraph): Set<string> {
   const cycleSet = new Set<string>();
   const adj = new Map<string, string[]>();
   for (const n of data.nodes) { if (n.kind === 'file') adj.set(n.id, []); }
@@ -76,6 +83,43 @@ export function detectCycles(data: DependencyGraphJSON): Set<string> {
 }
 
 /** 提取所有 package 名 */
-export function getPackageNames(data: DependencyGraphJSON): string[] {
+export function getPackageNames(data: LightweightGraph): string[] {
   return [...new Set(data.nodes.filter(n => n.package).map(n => n.package!))].sort();
+}
+
+/** 通过 VS Code postMessage 获取文件详情 */
+const vscodeApi = typeof acquireVsCodeApi !== 'undefined'
+  ? acquireVsCodeApi<{ type: string; fileId?: string; data?: FileDetails }>()
+  : null;
+
+const pendingRequests = new Map<string, (d: FileDetails | null) => void>();
+
+if (vscodeApi) {
+  window.addEventListener('message', (e) => {
+    const msg = e.data;
+    if (msg.type === 'fileDetails' && msg.fileId) {
+      const resolve = pendingRequests.get(msg.fileId);
+      if (resolve) {
+        pendingRequests.delete(msg.fileId);
+        resolve(msg.data ?? null);
+      }
+    }
+  });
+}
+
+export function fetchFileDetails(fileId: string): Promise<FileDetails | null> {
+  // If no vscode API (browser mode), return null
+  if (!vscodeApi) return Promise.resolve(null);
+
+  return new Promise((resolve) => {
+    pendingRequests.set(fileId, resolve);
+    vscodeApi.postMessage({ type: 'getFileDetails', fileId });
+    // Timeout after 5s
+    setTimeout(() => {
+      if (pendingRequests.has(fileId)) {
+        pendingRequests.delete(fileId);
+        resolve(null);
+      }
+    }, 5000);
+  });
 }
