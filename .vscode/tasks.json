@@ -15,16 +15,16 @@
       }
     },
     {
-      "type": "npm",
-      "script": "build",
-      "path": "packages/core",
+      "type": "shell",
+      "command": "pnpm",
+      "args": ["-C", "packages/core", "exec", "tsc"],
       "problemMatcher": ["$tsc"],
       "label": "Build core (tsc)"
     },
     {
-      "type": "npm",
-      "script": "build",
-      "path": "packages/web",
+      "type": "shell",
+      "command": "pnpm",
+      "args": ["-C", "packages/web", "exec", "tsc"],
       "problemMatcher": ["$tsc"],
       "label": "Build web server (tsc)"
     },
@@ -39,7 +39,6 @@
       "type": "npm",
       "script": "build",
       "path": "packages/vscode",
-      "isBackground": false,
       "problemMatcher": ["$tsc"],
       "label": "Build extension (tsc)"
     }
