@@ -40,24 +40,23 @@ export function Toolbar({ tab, onTabChange, currentPkg, onPkgChange, pkgNames, d
         {pkgNames.map(p => <option key={p} value={p}>{p}</option>)}
       </select>
       <div style={{position:'relative',flex:1,maxWidth:320}}>
-        <Command shouldFilter={false} label="Search files">
+        <Command label="Search files">
           <Command.Input
             placeholder="Search files…"
             onFocus={() => setOpen(true)}
             onBlur={() => setTimeout(() => setOpen(false), 200)}
-            onValueChange={() => setOpen(true)}
           />
-          {open && (
-            <Command.List style={{
-              position:'absolute',top:'100%',left:0,right:0,
-              background:'var(--surface)',border:'1px solid var(--border)',
-              borderRadius:'6px',maxHeight:300,overflowY:'auto',zIndex:100,
-              marginTop:4,boxShadow:'0 4px 12px rgba(0,0,0,.4)',padding:4,
-            }}>
-              <Command.Empty style={{padding:12,textAlign:'center',color:'var(--muted)',fontSize:12}}>
-                No files found
-              </Command.Empty>
-              {fileNames.slice(0, 30).map(f => (
+          <Command.List style={{
+            position:'absolute',top:'100%',left:0,right:0,
+            background:'var(--surface)',border:'1px solid var(--border)',
+            borderRadius:'6px',maxHeight:300,overflowY:'auto',zIndex:100,
+            marginTop:4,boxShadow:'0 4px 12px rgba(0,0,0,.4)',padding:4,
+            display: open ? 'block' : 'none',
+          }}>
+            <Command.Empty style={{padding:12,textAlign:'center',color:'var(--muted)',fontSize:12}}>
+              No files found
+            </Command.Empty>
+            {fileNames.map(f => (
                 <Command.Item
                   key={f.id}
                   value={f.id}
@@ -80,8 +79,7 @@ export function Toolbar({ tab, onTabChange, currentPkg, onPkgChange, pkgNames, d
                   )}
                 </Command.Item>
               ))}
-            </Command.List>
-          )}
+          </Command.List>
         </Command>
       </div>
       <div className="stats">
