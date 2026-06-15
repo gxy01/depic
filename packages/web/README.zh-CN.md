@@ -1,36 +1,43 @@
 # @depic/web
 
-交互式 Web 可视化界面，用于浏览 JS/TS 依赖图。可生成独立 HTML 报告，或启动本地服务器实时探索。
+交互式依赖图可视化。生成一个包含 React 应用的自包含 HTML 文件，支持数千个文件的依赖图浏览。
+
+[English](./README.md) | 中文
+
+## 特性
+
+- **Sigma.js WebGL** — 硬件加速，3,000+ 节点流畅渲染
+- **三视图** — Graph（力导向图）、Tree（react-virtuoso 虚拟滚动）、File（详情面板）
+- **搜索自动补全** — cmdk 命令面板，文件名模糊匹配
+- **包筛选器** — Monorepo 支持：自动检测子包，下拉框筛选
+- **循环依赖高亮** — 环中文件红色标记
+- **自包含** — 单个 HTML 文件，无需服务器
 
 ## 安装
 
 ```bash
-npm i @depic/web
+npm install @depic/web
 ```
 
-## API
+## 用法
 
 ```ts
-import { generateHtml, generateHtmlFromGraph, startServer } from '@depic/web';
 import { analyze } from '@depic/core';
+import { generateHtmlFromGraph } from '@depic/web';
+import { writeFileSync } from 'node:fs';
 
-// 从项目根目录生成 HTML
-const html = await generateHtml('/path/to/project');
-
-// 或从已有图生成
 const graph = await analyze({ root: '/path/to/project' });
-const html2 = generateHtmlFromGraph(graph, 'My Project');
-
-// 启动本地服务器，包含 API 和可视化
-await startServer('/path/to/project', 3000);
-// → http://localhost:3000
+const html = generateHtmlFromGraph(graph, 'My Project');
+writeFileSync('deps.html', html);
 ```
 
-## 接口 (使用 startServer 时)
+或通过 CLI：
 
-| 路径 | 说明 |
-|---|---|
-| `GET /` | 交互式依赖图页面 |
-| `GET /api/graph` | 完整依赖图 JSON |
-| `GET /api/stats` | 依赖统计 |
-| `GET /api/cycles` | 循环依赖列表 |
+```bash
+npx depic web /path/to/project
+npx depic serve /path/to/project  # 启动本地服务器 :3000
+```
+
+## License
+
+MIT
