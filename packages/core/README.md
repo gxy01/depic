@@ -2,7 +2,7 @@
 
 Core engine for JS/TS dependency analysis. Parses source files with SWC, resolves module specifiers, and builds a dependency graph.
 
-English | [中文](./README.zh-CN.md)
+English | [中文](https://github.com/gxy01/depic/blob/main/packages/core/README.zh-CN.md)
 
 ## Features
 
