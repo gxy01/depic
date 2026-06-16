@@ -2,7 +2,7 @@
 
 Interactive dependency graph visualization. Generates a self-contained HTML file with a React app, supporting thousands of files.
 
-English | [中文](./README.zh-CN.md)
+English | [中文](https://github.com/gxy01/depic/blob/main/packages/web/README.zh-CN.md)
 
 ## Features
 

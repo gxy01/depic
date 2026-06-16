@@ -2,7 +2,7 @@
 
 Command-line tool for JS/TS dependency analysis.
 
-English | [中文](./README.zh-CN.md)
+English | [中文](https://github.com/gxy01/depic/blob/main/packages/cli/README.zh-CN.md)
 
 ## Install
 

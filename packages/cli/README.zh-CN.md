@@ -2,7 +2,7 @@
 
 JS/TS 代码依赖分析命令行工具。
 
-[English](./README.md) | 中文
+[English](https://github.com/gxy01/depic/blob/main/packages/cli/README.md) | 中文
 
 ## 安装
 

@@ -1,6 +1,6 @@
 {
   "name": "@depic/cli",
-  "version": "0.1.4",
+  "version": "0.1.5",
   "description": "CLI for depic — JS/TS dependency analysis",
   "license": "MIT",
   "type": "module",

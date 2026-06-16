@@ -2,7 +2,7 @@
 
 JS/TS 代码依赖分析核心引擎。基于 SWC 解析源码，构建项目依赖图。
 
-[English](./README.md) | 中文
+[English](https://github.com/gxy01/depic/blob/main/packages/core/README.md) | 中文
 
 ## 特性
 

@@ -2,7 +2,7 @@
 
 交互式依赖图可视化。生成一个包含 React 应用的自包含 HTML 文件，支持数千个文件的依赖图浏览。
 
-[English](./README.md) | 中文
+[English](https://github.com/gxy01/depic/blob/main/packages/web/README.md) | 中文
 
 ## 特性
 
