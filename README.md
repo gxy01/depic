@@ -2,6 +2,8 @@
 
 A JavaScript/TypeScript dependency analysis toolkit powered by SWC. Parse source code into module dependency graphs, with circular dependency detection, topological sorting, and interactive visualization.
 
+🌐 **[Live Demo →](https://gxy01.github.io/depic/)** — Try depic analyzing itself, with interactive WebGL graph, tree view, and search.
+
 ## Architecture
 
 ```
