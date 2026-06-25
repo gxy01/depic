@@ -1,0 +1,587 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Depic — Dependency Visualized</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Outfit:wght@400;500;600;700;800&family=DM+Sans:opsz,wght@9..40,400;9..40,500;9..40,600&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --bg-deep: #07070e;
+    --bg-card: #0f0f1a;
+    --bg-card-hover: #151525;
+    --border: #1e1e35;
+    --text: #d8d8e8;
+    --muted: #6b6b88;
+    --cyan: #00d4ff;
+    --cyan-dim: #00d4ff22;
+    --amber: #f0a040;
+    --amber-dim: #f0a04022;
+    --green: #4ecca3;
+    --green-dim: #4ecca322;
+    --radius: 12px;
+  }
+
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+  html { scroll-behavior: smooth; }
+  body {
+    font-family: 'DM Sans', system-ui, sans-serif;
+    background: var(--bg-deep);
+    color: var(--text);
+    line-height: 1.6;
+    overflow-x: hidden;
+  }
+
+  /* ── Canvas Background ── */
+  #graph-bg {
+    position: fixed;
+    inset: 0;
+    z-index: 0;
+    pointer-events: none;
+    opacity: 0.55;
+  }
+
+  /* ── Grain Overlay ── */
+  .grain {
+    position: fixed;
+    inset: 0;
+    z-index: 1;
+    pointer-events: none;
+    opacity: 0.035;
+    background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 256 256' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.85' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E");
+    background-size: 200px 200px;
+  }
+
+  /* ── Layout ── */
+  .content { position: relative; z-index: 2; }
+
+  section { padding: 100px 24px; max-width: 1100px; margin: 0 auto; }
+
+  /* ── Typography ── */
+  h1, h2, h3, .logo {
+    font-family: 'Outfit', system-ui, sans-serif;
+    font-weight: 700;
+    letter-spacing: -0.02em;
+  }
+  h1 { font-size: clamp(3rem, 7vw, 5.5rem); line-height: 1.05; }
+  h2 { font-size: clamp(2rem, 4vw, 3rem); margin-bottom: 1rem; }
+  .mono { font-family: 'JetBrains Mono', monospace; }
+
+  /* ── Hero ── */
+  .hero {
+    min-height: 90vh;
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    align-items: flex-start;
+    padding-top: 0;
+    padding-bottom: 80px;
+  }
+
+  .hero-badge {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    background: var(--bg-card);
+    border: 1px solid var(--border);
+    border-radius: 999px;
+    padding: 6px 16px 6px 6px;
+    font-size: 0.85rem;
+    color: var(--muted);
+    margin-bottom: 2rem;
+    animation: fadeUp 0.8s ease-out;
+  }
+  .hero-badge .dot {
+    width: 8px; height: 8px;
+    border-radius: 50%;
+    background: var(--green);
+    box-shadow: 0 0 8px var(--green);
+  }
+
+  .hero h1 {
+    animation: fadeUp 0.8s 0.1s ease-out both;
+    margin-bottom: 1.5rem;
+  }
+  .hero h1 .accent { color: var(--cyan); }
+
+  .hero-desc {
+    font-size: clamp(1.1rem, 2vw, 1.35rem);
+    color: var(--muted);
+    max-width: 580px;
+    animation: fadeUp 0.8s 0.2s ease-out both;
+    margin-bottom: 2.5rem;
+  }
+
+  .hero-actions {
+    display: flex;
+    gap: 12px;
+    flex-wrap: wrap;
+    animation: fadeUp 0.8s 0.3s ease-out both;
+  }
+
+  .btn {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    padding: 12px 24px;
+    border-radius: 999px;
+    font-family: 'Outfit', sans-serif;
+    font-weight: 600;
+    font-size: 0.95rem;
+    text-decoration: none;
+    transition: all 0.2s ease;
+    cursor: pointer;
+    border: none;
+  }
+  .btn-primary {
+    background: var(--cyan);
+    color: #000;
+  }
+  .btn-primary:hover {
+    background: #33ddff;
+    box-shadow: 0 0 30px var(--cyan-dim);
+    transform: translateY(-2px);
+  }
+  .btn-ghost {
+    background: transparent;
+    color: var(--text);
+    border: 1px solid var(--border);
+  }
+  .btn-ghost:hover {
+    border-color: var(--cyan);
+    color: var(--cyan);
+  }
+
+  /* ── Stats Row ── */
+  .stats-row {
+    display: flex;
+    gap: 48px;
+    margin-top: 3rem;
+    animation: fadeUp 0.8s 0.4s ease-out both;
+  }
+  .stat-val { font-family: 'Outfit', sans-serif; font-size: 1.8rem; font-weight: 700; color: var(--text); }
+  .stat-lbl { font-size: 0.8rem; color: var(--muted); text-transform: uppercase; letter-spacing: 0.08em; }
+
+  /* ── Section Headers ── */
+  .section-label {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 0.8rem;
+    color: var(--cyan);
+    text-transform: uppercase;
+    letter-spacing: 0.12em;
+    margin-bottom: 0.75rem;
+  }
+
+  /* ── Architecture ── */
+  .arch-grid {
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+    margin-top: 2.5rem;
+  }
+  .arch-layer {
+    background: var(--bg-card);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    padding: 20px 28px;
+    display: flex;
+    align-items: center;
+    gap: 16px;
+    transition: all 0.25s ease;
+    position: relative;
+    overflow: hidden;
+  }
+  .arch-layer:hover {
+    border-color: var(--cyan);
+    background: var(--bg-card-hover);
+    transform: translateX(8px);
+  }
+  .arch-layer .layer-icon {
+    font-size: 1.4rem;
+    width: 44px; height: 44px;
+    display: flex; align-items: center; justify-content: center;
+    border-radius: 10px;
+    flex-shrink: 0;
+  }
+  .arch-layer:nth-child(1) .layer-icon { background: var(--amber-dim); }
+  .arch-layer:nth-child(2) .layer-icon { background: #c084fc22; }
+  .arch-layer:nth-child(3) .layer-icon { background: var(--cyan-dim); }
+  .arch-layer:nth-child(4) .layer-icon { background: var(--green-dim); }
+  .arch-layer .layer-info h4 { font-family: 'Outfit', sans-serif; font-weight: 600; }
+  .arch-layer .layer-info p { color: var(--muted); font-size: 0.9rem; }
+  .arch-layer .connector {
+    position: absolute;
+    left: 21px;
+    width: 2px;
+    background: var(--border);
+  }
+  .arch-layer:first-child .connector { top: 50%; height: 50%; }
+  .arch-layer:last-child .connector { top: 0; height: 50%; }
+  .arch-layer:not(:first-child):not(:last-child) .connector { top: 0; height: 100%; }
+
+  /* ── Terminal ── */
+  .terminal {
+    background: #0a0a12;
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    overflow: hidden;
+    margin-top: 2rem;
+    box-shadow: 0 20px 60px rgba(0,0,0,0.5);
+  }
+  .terminal-bar {
+    background: #111122;
+    padding: 12px 16px;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    border-bottom: 1px solid var(--border);
+  }
+  .terminal-dot { width: 10px; height: 10px; border-radius: 50%; }
+  .terminal-dot:nth-child(1) { background: #ff5f57; }
+  .terminal-dot:nth-child(2) { background: #febc2e; }
+  .terminal-dot:nth-child(3) { background: #28c840; }
+  .terminal-body {
+    padding: 20px 24px;
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 0.85rem;
+    line-height: 1.7;
+  }
+  .terminal-body .prompt { color: var(--green); }
+  .terminal-body .cmd { color: var(--cyan); }
+  .terminal-body .flag { color: var(--amber); }
+  .terminal-body .out { color: var(--muted); }
+
+  /* ── Feature Cards ── */
+  .card-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+    gap: 20px;
+    margin-top: 2.5rem;
+  }
+  .card {
+    background: var(--bg-card);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    padding: 28px;
+    transition: all 0.25s ease;
+  }
+  .card:hover {
+    border-color: var(--cyan);
+    background: var(--bg-card-hover);
+    transform: translateY(-4px);
+  }
+  .card .card-icon {
+    font-size: 1.5rem;
+    margin-bottom: 1rem;
+    width: 48px; height: 48px;
+    display: flex; align-items: center; justify-content: center;
+    border-radius: 12px;
+    background: var(--cyan-dim);
+  }
+  .card h3 { font-size: 1.15rem; margin-bottom: 0.5rem; }
+  .card p { color: var(--muted); font-size: 0.92rem; }
+
+  /* ── Install ── */
+  .install-bar {
+    background: var(--bg-card);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    padding: 6px;
+    display: flex;
+    align-items: center;
+    max-width: 480px;
+    margin-top: 1.5rem;
+  }
+  .install-bar code {
+    flex: 1;
+    padding: 12px 18px;
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 0.9rem;
+    color: var(--text);
+    background: transparent;
+    border: none;
+    outline: none;
+  }
+  .install-bar .btn-copy {
+    padding: 10px 20px;
+    border-radius: 999px;
+    background: var(--cyan);
+    color: #000;
+    border: none;
+    font-family: 'Outfit', sans-serif;
+    font-weight: 600;
+    font-size: 0.85rem;
+    cursor: pointer;
+    transition: all 0.2s ease;
+  }
+  .install-bar .btn-copy:hover { background: #33ddff; }
+
+  /* ── Footer ── */
+  footer {
+    border-top: 1px solid var(--border);
+    padding: 32px 24px;
+    text-align: center;
+    color: var(--muted);
+    font-size: 0.85rem;
+  }
+  footer a { color: var(--cyan); text-decoration: none; }
+  footer a:hover { text-decoration: underline; }
+
+  /* ── Animations ── */
+  @keyframes fadeUp {
+    from { opacity: 0; transform: translateY(24px); }
+    to   { opacity: 1; transform: translateY(0); }
+  }
+
+  .reveal {
+    opacity: 0;
+    transform: translateY(30px);
+    transition: opacity 0.6s ease-out, transform 0.6s ease-out;
+  }
+  .reveal.visible { opacity: 1; transform: translateY(0); }
+
+  /* ── Responsive ── */
+  @media (max-width: 768px) {
+    section { padding: 60px 16px; }
+    .hero { min-height: auto; padding-top: 40px; }
+    .stats-row { gap: 24px; }
+    .arch-layer { padding: 16px 20px; }
+    .card-grid { grid-template-columns: 1fr; }
+  }
+</style>
+</head>
+<body>
+
+<canvas id="graph-bg"></canvas>
+<div class="grain"></div>
+
+<div class="content">
+
+  <!-- Hero -->
+  <section class="hero">
+    <div class="hero-badge"><span class="dot"></span> Open source — MIT</div>
+    <h1>Dependency<br><span class="accent">Visualized</span></h1>
+    <p class="hero-desc">
+      A toolkit that parses your JS/TS codebase into a living dependency graph.
+      Detect cycles, trace dependents, and explore architecture — in your terminal, editor, or browser.
+    </p>
+    <div class="hero-actions">
+      <a href="#install" class="btn btn-primary">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+        Install
+      </a>
+      <a href="https://github.com/gxy01/depic" class="btn btn-ghost">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor"><path d="M12 0c-6.626 0-12 5.373-12 12 0 5.302 3.438 9.8 8.207 11.387.599.111.793-.261.793-.577v-2.234c-3.338.726-4.033-1.416-4.033-1.416-.546-1.387-1.333-1.756-1.333-1.756-1.089-.745.083-.729.083-.729 1.205.084 1.839 1.237 1.839 1.237 1.07 1.834 2.807 1.304 3.492.997.107-.775.418-1.305.762-1.604-2.665-.305-5.467-1.334-5.467-5.931 0-1.311.469-2.381 1.236-3.221-.124-.303-.535-1.524.117-3.176 0 0 1.008-.322 3.301 1.23.957-.266 1.983-.399 3.003-.404 1.02.005 2.047.138 3.006.404 2.291-1.552 3.297-1.23 3.297-1.23.653 1.653.242 2.874.118 3.176.77.84 1.235 1.911 1.235 3.221 0 4.609-2.807 5.624-5.479 5.921.43.372.823 1.102.823 2.222v3.293c0 .319.192.694.801.576 4.765-1.589 8.199-6.086 8.199-11.386 0-6.627-5.373-12-12-12z"/></svg>
+        GitHub
+      </a>
+    </div>
+    <div class="stats-row">
+      <div><div class="stat-val">SWC</div><div class="stat-lbl">Parser engine</div></div>
+      <div><div class="stat-val">TS</div><div class="stat-lbl">First-class</div></div>
+      <div><div class="stat-val">4</div><div class="stat-lbl">Packages</div></div>
+    </div>
+  </section>
+
+  <!-- Architecture -->
+  <section class="reveal">
+    <div class="section-label">Architecture</div>
+    <h2>Layered, composable.</h2>
+    <div class="arch-grid">
+      <div class="arch-layer">
+        <div class="connector"></div>
+        <div class="layer-icon">⌨</div>
+        <div class="layer-info"><h4>CLI</h4><p>Command-line interface — analyze, cycles, dependents, stats, serve</p></div>
+      </div>
+      <div class="arch-layer">
+        <div class="connector"></div>
+        <div class="layer-icon">⊞</div>
+        <div class="layer-info"><h4>VS Code</h4><p>IDE integration — graph visualization & diagnostics inside your editor</p></div>
+      </div>
+      <div class="arch-layer">
+        <div class="connector"></div>
+        <div class="layer-icon">◈</div>
+        <div class="layer-info"><h4>Web UI</h4><p>Interactive visualization — HTML reports & live server with API</p></div>
+      </div>
+      <div class="arch-layer">
+        <div class="layer-icon">⬡</div>
+        <div class="layer-info"><h4>Core Engine</h4><p>Parser · Resolver · Graph — the shared foundation powered by SWC</p></div>
+      </div>
+    </div>
+  </section>
+
+  <!-- Terminal -->
+  <section class="reveal">
+    <div class="section-label">Quick Start</div>
+    <h2>One command to<br>see your whole codebase.</h2>
+    <div class="terminal">
+      <div class="terminal-bar"><span class="terminal-dot"></span><span class="terminal-dot"></span><span class="terminal-dot"></span></div>
+      <div class="terminal-body">
+        <div><span class="prompt">~</span> <span class="cmd">npm i -g @depic/cli</span></div>
+        <div class="out">added 47 packages in 3s</div>
+        <br>
+        <div><span class="prompt">~/project</span> <span class="cmd">depic analyze</span> <span class="flag">--dot</span></div>
+        <div class="out">digraph {</div>
+        <div class="out">  "src/index.ts" -&gt; "src/utils.ts"</div>
+        <div class="out">  "src/utils.ts" -&gt; "node_modules/lodash"</div>
+        <div class="out">  ...</div>
+        <div class="out">}</div>
+        <br>
+        <div><span class="prompt">~/project</span> <span class="cmd">depic serve</span> <span class="flag">--port 3000</span></div>
+        <div class="out">Server running at http://localhost:3000</div>
+      </div>
+    </div>
+  </section>
+
+  <!-- Features -->
+  <section class="reveal">
+    <div class="section-label">Packages</div>
+    <h2>Pick what you need.</h2>
+    <div class="card-grid">
+      <div class="card">
+        <div class="card-icon">⬡</div>
+        <h3>@depic/core</h3>
+        <p>Core engine. Parse files with SWC, resolve module specifiers, build directed graphs, detect cycles, compute topological order.</p>
+        <p style="margin-top:12px"><code class="mono" style="color:var(--cyan);font-size:0.82rem;">npm i @depic/core</code></p>
+      </div>
+      <div class="card">
+        <div class="card-icon" style="background:var(--amber-dim);">⌨</div>
+        <h3>@depic/cli</h3>
+        <p>Terminal-first tool. Analyze, detect cycles, find dependents, generate HTML reports, or start a live server.</p>
+        <p style="margin-top:12px"><code class="mono" style="color:var(--amber);font-size:0.82rem;">npm i @depic/cli</code></p>
+      </div>
+      <div class="card">
+        <div class="card-icon" style="background:var(--green-dim);">◈</div>
+        <h3>@depic/web</h3>
+        <p>Interactive graph UI. Generate standalone HTML reports or start a local server with live graph browsing and REST API.</p>
+        <p style="margin-top:12px"><code class="mono" style="color:var(--green);font-size:0.82rem;">npm i @depic/web</code></p>
+      </div>
+      <div class="card">
+        <div class="card-icon" style="background:#c084fc22;">⊞</div>
+        <h3>depic-vscode</h3>
+        <p>Full IDE integration. Visualize the dependency graph, check cycles, and find dependents without leaving VS Code.</p>
+        <p style="margin-top:12px"><code class="mono" style="color:#c084fc;font-size:0.82rem;">VS Code Marketplace</code></p>
+      </div>
+    </div>
+  </section>
+
+  <!-- Install -->
+  <section class="reveal" id="install">
+    <div class="section-label">Install</div>
+    <h2>npm install.</h2>
+    <p style="color:var(--muted);margin-bottom:0.5rem;">Grab the CLI — it bundles everything you need.</p>
+    <div class="install-bar">
+      <code>npm i -g @depic/cli</code>
+      <button class="btn-copy" onclick="copyInstall()">Copy</button>
+    </div>
+  </section>
+
+  <!-- Footer -->
+  <footer>
+    <p>Depic · MIT License · <a href="https://github.com/gxy01/depic">github.com/gxy01/depic</a></p>
+  </footer>
+
+</div>
+
+<script>
+  /* ── Graph Background ── */
+  const canvas = document.getElementById('graph-bg');
+  const ctx = canvas.getContext('2d');
+  let nodes = [];
+  let edges = [];
+
+  function resize() {
+    canvas.width = window.innerWidth;
+    canvas.height = document.body.scrollHeight;
+  }
+  resize();
+  window.addEventListener('resize', () => { resize(); seed(); });
+
+  function seed() {
+    const count = Math.floor((canvas.width * canvas.height) / 18000);
+    nodes = [];
+    edges = [];
+    for (let i = 0; i < count; i++) {
+      nodes.push({
+        x: Math.random() * canvas.width,
+        y: Math.random() * canvas.height,
+        vx: (Math.random() - 0.5) * 0.3,
+        vy: (Math.random() - 0.5) * 0.3,
+        r: Math.random() * 2 + 0.8,
+      });
+    }
+    for (let i = 0; i < nodes.length; i++) {
+      for (let j = i + 1; j < nodes.length; j++) {
+        const dx = nodes[i].x - nodes[j].x;
+        const dy = nodes[i].y - nodes[j].y;
+        const dist = Math.sqrt(dx * dx + dy * dy);
+        if (dist < 180) {
+          edges.push({ a: i, b: j, opacity: 1 - dist / 180 });
+        }
+      }
+    }
+  }
+  seed();
+
+  function draw() {
+    ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+    // edges
+    for (const e of edges) {
+      const a = nodes[e.a], b = nodes[e.b];
+      ctx.beginPath();
+      ctx.moveTo(a.x, a.y);
+      ctx.lineTo(b.x, b.y);
+      ctx.strokeStyle = `rgba(0,212,255,${e.opacity * 0.09})`;
+      ctx.lineWidth = 0.5;
+      ctx.stroke();
+    }
+
+    // nodes
+    for (const n of nodes) {
+      ctx.beginPath();
+      ctx.arc(n.x, n.y, n.r, 0, Math.PI * 2);
+      ctx.fillStyle = 'rgba(0,212,255,0.18)';
+      ctx.fill();
+
+      // occasional glow
+      if (Math.random() < 0.003) {
+        ctx.beginPath();
+        ctx.arc(n.x, n.y, n.r * 3, 0, Math.PI * 2);
+        ctx.fillStyle = 'rgba(0,212,255,0.04)';
+        ctx.fill();
+      }
+    }
+
+    // move nodes
+    for (const n of nodes) {
+      n.x += n.vx;
+      n.y += n.vy;
+      if (n.x < 0 || n.x > canvas.width) n.vx *= -1;
+      if (n.y < 0 || n.y > canvas.height) n.vy *= -1;
+    }
+
+    requestAnimationFrame(draw);
+  }
+  draw();
+
+  /* ── Scroll Reveal ── */
+  const observer = new IntersectionObserver((entries) => {
+    entries.forEach(e => {
+      if (e.isIntersecting) e.target.classList.add('visible');
+    });
+  }, { threshold: 0.15 });
+  document.querySelectorAll('.reveal').forEach(el => observer.observe(el));
+
+  /* ── Copy ── */
+  function copyInstall() {
+    navigator.clipboard.writeText('npm i -g @depic/cli');
+    const btn = document.querySelector('.btn-copy');
+    btn.textContent = 'Copied!';
+    setTimeout(() => btn.textContent = 'Copy', 1800);
+  }
+</script>
+</body>
+</html>
