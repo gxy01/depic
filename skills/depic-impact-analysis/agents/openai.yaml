@@ -1,0 +1,4 @@
+interface:
+  display_name: "Depic Impact Analysis"
+  short_description: "Find impacted entries and monorepo packages"
+  default_prompt: "Use $depic-impact-analysis to identify impacted entries and packages from a diff."

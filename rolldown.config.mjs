@@ -17,7 +17,10 @@ export default defineConfig([
   },
   // @depic/cli
   {
-    input: 'packages/cli/src/index.ts',
+    input: {
+      index: 'packages/cli/src/index.ts',
+      cli: 'packages/cli/src/cli.ts',
+    },
     output: { format: 'esm', dir: 'packages/cli/dist' },
     external: ['@depic/core', '@depic/web', /^node:/],
     platform: 'node',

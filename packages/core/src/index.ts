@@ -15,6 +15,23 @@ export type {
 } from './resolver/types.js';
 
 export { analyze } from './analyze.js';
+export {
+  DEPIC_CONFIG_FILE,
+  loadDepicConfig,
+  applyDepicConfig,
+} from './config.js';
+export type { DepicConfig, DepicImpactConfig } from './config.js';
+export { analyzeImpact } from './impact/index.js';
+export type {
+  EntryTarget,
+  PackageTarget,
+  ImpactTarget,
+  ImpactOptions,
+  ImpactKind,
+  ImpactDiagnostic,
+  TargetImpact,
+  ImpactReport,
+} from './impact/types.js';
 export { DependencyGraph } from './graph/index.js';
 export type { AnalyzeOptions } from './types.js';
 export type {
@@ -28,4 +45,3 @@ export type {
   GraphStats,
   DependencyGraphJSON,
 } from './graph/types.js';
-

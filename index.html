@@ -20,6 +20,9 @@ h2{font-size:24px;margin:40px 0 16px;padding-bottom:8px;border-bottom:1px solid 
 .card{background:var(--surface);border:1px solid var(--border);border-radius:8px;padding:20px}
 .card h3{font-size:16px;margin-bottom:8px}
 .card p{font-size:14px;color:var(--muted)}
+.skill{border-color:#238636;background:linear-gradient(135deg,var(--surface),#12261b)}
+.skill h3{color:#7ee787}
+.skill-actions{margin-top:14px}
 code{background:var(--surface);padding:2px 6px;border-radius:3px;font-size:13px;border:1px solid var(--border)}
 pre{background:var(--surface);border:1px solid var(--border);border-radius:6px;padding:16px;overflow-x:auto;font-size:13px;margin:12px 0}
 footer{margin-top:60px;padding-top:20px;border-top:1px solid var(--border);text-align:center;color:var(--muted);font-size:13px}
@@ -38,8 +41,19 @@ footer{margin-top:60px;padding-top:20px;border-top:1px solid var(--border);text-
 <div class="grid">
   <div class="card"><h3>@depic/core</h3><p>Core engine — parse, resolve, graph. 15+ import syntaxes, tsconfig paths, monorepo workspace support.</p><a href="https://www.npmjs.com/package/@depic/core">npm →</a></div>
   <div class="card"><h3>@depic/web</h3><p>Interactive WebGL graph visualization. Graph / Tree / File views. Self-contained HTML.</p><a href="https://www.npmjs.com/package/@depic/web">npm →</a></div>
-  <div class="card"><h3>@depic/cli</h3><p>CLI tool: analyze, cycle detection, dependents listing, web generation, live server.</p><a href="https://www.npmjs.com/package/@depic/cli">npm →</a></div>
+  <div class="card"><h3>@depic/cli</h3><p>CLI tool: dependency analysis, change impact, cycle detection, web generation, and live server.</p><a href="https://www.npmjs.com/package/@depic/cli">npm →</a></div>
   <div class="card"><h3>VS Code</h3><p>Interactive dependency graph inside VS Code. Search, filter, explore deps.</p><a href="https://github.com/gxy01/depic/tree/main/packages/vscode">GitHub →</a></div>
+</div>
+
+<h2>Official Agent Skill</h2>
+<div class="card skill">
+  <h3>depic-impact-analysis</h3>
+  <p>Give your coding agent a repeatable workflow for discovering application entries or monorepo packages, configuring <code>depic.config.json</code>, and turning a unified diff into an explainable impact report.</p>
+  <pre>npx skills add https://github.com/gxy01/depic --skill depic-impact-analysis</pre>
+  <div class="skill-actions">
+    <a class="btn btn-primary" href="./skills/depic-impact-analysis/SKILL.md">View SKILL.md</a>
+    <a class="btn btn-outline" href="https://github.com/gxy01/depic/tree/main/skills/depic-impact-analysis">View on GitHub</a>
+  </div>
 </div>
 
 <h2>Quick Start</h2>
@@ -52,7 +66,7 @@ open deps.html</pre>
   <div class="card stat"><b>&lt;10s</b><p>3,751 files analyzed</p></div>
   <div class="card stat"><b>15+</b><p>import syntaxes supported</p></div>
   <div class="card stat"><b>3 views</b><p>Graph / Tree / File</p></div>
-  <div class="card stat"><b>212 tests</b><p>5 packages covered</p></div>
+  <div class="card stat"><b>227 tests</b><p>5 packages covered</p></div>
 </div>
 
 <footer>depic · <a href="https://github.com/gxy01/depic">github.com/gxy01/depic</a></footer>

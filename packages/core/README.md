@@ -11,6 +11,7 @@ English | [中文](https://github.com/gxy01/depic/blob/main/packages/core/README
 - **Graph** — Directed graph with cycle detection, transitive deps, dependency chains, symbol tracing (re-export / export * resolution)
 - **Monorepo** — Auto-detect package boundaries from `package.json`, include/exclude glob patterns
 - **Symbol-level** — Optional `symbolLevel` analysis with `resolveSymbol()` for origin tracing
+- **Impact analysis** — Map a unified diff to entries or monorepo packages and return potentially affected targets with dependency chains
 
 ## Install
 
@@ -44,6 +45,37 @@ graph.stats(); // { fileCount, edgeCount, externalCount, ... }
 graph.toJSON();
 graph.toDot();
 ```
+
+### Change impact analysis
+
+Provide the post-change workspace, a unified diff, and impact targets. An `entry`
+target is supplied by framework-specific tooling or an AI skill; a `package` target
+uses the monorepo package name already discovered by Depic. Store shared targets
+under `impact.targets` in the root `depic.config.json`.
+
+```ts
+import { analyzeImpact } from '@depic/core';
+
+const report = await analyzeImpact({
+  root: '/path/to/project',
+  diff: diffText,
+});
+
+// [{ target, impact: 'direct' | 'transitive' | 'global', dependencyChains, ... }]
+report.impacts;
+```
+
+`EntryTarget.file` is relative to `root`. Type-only imports are excluded by default;
+pass `includeTypeOnly: true` for type-contract analysis. Configuration changes such
+as `package.json` are reported as global impact. Dependency chains are shortest-first,
+and pure re-export barrels do not turn a direct impact into a transitive one. See
+the repository
+[`IMPACT-ANALYSIS-FEATURES.md`](../../docs/IMPACT-ANALYSIS-FEATURES.md) for the
+complete contract.
+
+`analyze()` and `analyzeImpact()` both load `depic.config.json`. The file accepts
+`include`, `exclude`, `tsconfigPath`, `extensions`, `symbolLevel`, `workspace`,
+and an `impact` object. Explicit API options override configured values.
 
 ## API
 
