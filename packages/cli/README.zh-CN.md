@@ -10,9 +10,24 @@ JS/TS 代码依赖分析命令行工具。
 npm install @depic/cli
 ```
 
+## Agent 辅助的变更影响分析
+
+当用户想知道某次变更可能影响哪些页面、路由、任务或 monorepo package 时，推荐先安装官方
+[`depic-impact-analysis`](https://github.com/gxy01/depic/blob/main/skills/depic-impact-analysis/SKILL.md) Skill：
+
+```bash
+npx skills add gxy01/depic --skill depic-impact-analysis
+```
+
+Skill 负责检查仓库和首次目标发现：提出框架相关的 `entry` 目标与 workspace
+`package` 目标，询问用户确认，并将共享结果写入 `depic.config.json`。CLI
+负责可复现的执行：读取已确认目标和 unified diff，调用 `@depic/core`，
+写入详细 JSON 报告并输出简短摘要。Depic 本身不读取 Git 状态，也不调用 AI 模型。
+
 ## 命令
 
 ```bash
+depic init [root]          配置 .depic 运行产物的 Git 忽略规则
 depic analyze <root>       分析项目，输出 JSON（--dot 输出 Graphviz 格式）
 depic cycles <root>        检测循环依赖
 depic dependents <file>    查看谁依赖了某个文件
