@@ -1,5 +1,7 @@
 # Depic
 
+English | [简体中文](./README.zh-CN.md)
+
 A JavaScript/TypeScript dependency analysis toolkit powered by SWC. Depic turns
 source code into a module dependency graph for exploration, architecture checks,
 interactive visualization, and explainable change impact analysis.

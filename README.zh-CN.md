@@ -1,5 +1,7 @@
 # Depic
 
+[English](./README.md) | 简体中文
+
 一个基于 SWC 的 JavaScript/TypeScript 依赖分析工具集。Depic 将源码转换为模块依赖图，用于代码库探索、架构检查、交互式可视化和可解释的变更影响分析。
 
 🌐 **[在线演示 →](https://gxy01.github.io/depic/)** — 使用 Depic 分析自身，体验 WebGL 依赖图、树形视图和搜索。
