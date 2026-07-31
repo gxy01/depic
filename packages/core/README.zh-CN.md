@@ -48,7 +48,13 @@ graph.toDot();
 
 ### 变更影响分析
 
-传入变更后的项目工作区、unified diff 和影响目标。`entry` 目标由框架工具或 AI skill 识别；`package` 目标使用 Depic 自动发现的 monorepo 包名。共享目标统一放在根目录 `depic.config.json` 的 `impact.targets` 中。
+传入变更后的项目工作区、unified diff 和影响目标。`entry` 目标由框架工具或官方
+[`depic-impact-analysis`](https://github.com/gxy01/depic/blob/main/skills/depic-impact-analysis/SKILL.md) Agent
+Skill 识别；`package` 目标使用 Depic 自动发现的 monorepo 包名。共享目标统一放在根目录
+`depic.config.json` 的 `impact.targets` 中。
+
+Skill 是上游适配器：利用 AI 检查框架约定，并让用户确认有意义的目标。
+`@depic/core` 保持确定性和框架无关，只根据已确认的目标节点计算可达性与依赖链。
 
 ```ts
 import { analyzeImpact } from '@depic/core';

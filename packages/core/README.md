@@ -49,9 +49,16 @@ graph.toDot();
 ### Change impact analysis
 
 Provide the post-change workspace, a unified diff, and impact targets. An `entry`
-target is supplied by framework-specific tooling or an AI skill; a `package` target
-uses the monorepo package name already discovered by Depic. Store shared targets
-under `impact.targets` in the root `depic.config.json`.
+target is supplied by framework-specific tooling or the official
+[`depic-impact-analysis`](https://github.com/gxy01/depic/blob/main/skills/depic-impact-analysis/SKILL.md) Agent
+Skill; a `package` target uses the monorepo package name already discovered by
+Depic. Store shared targets under `impact.targets` in the root
+`depic.config.json`.
+
+The Skill is an upstream adapter: it uses AI to inspect framework conventions and
+ask the user to confirm meaningful targets. `@depic/core` remains deterministic
+and framework-independent; it computes reachability and dependency chains from
+the confirmed target nodes.
 
 ```ts
 import { analyzeImpact } from '@depic/core';

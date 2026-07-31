@@ -6,6 +6,9 @@
 
 本功能只做静态、可复现的依赖影响分析；不判断某个实现改动是否一定改变用户可见行为。
 
+面向编码 Agent 的推荐入口是仓库中的官方
+[`depic-impact-analysis`](../skills/depic-impact-analysis/SKILL.md) Skill。它负责检查项目、提出并确认目标、维护配置和解释报告；Depic Core/CLI 负责确定性的依赖分析。
+
 ## 术语
 
 | 术语 | 含义 |
@@ -21,7 +24,7 @@
 
 - `root` 必须是 diff 应用后的工作区（diff 的新版本）。
 - Depic 不读取 Git 状态，也不调用或绑定任何 AI 模型。
-- AI skill 是 `entry` 目标识别的上游；Depic 不解析 React、Vue 或其他框架路由规则。
+- 官方 Agent Skill 是 `entry` 目标识别的上游；Depic 不解析 React、Vue 或其他框架路由规则。
 - `EntryTarget.file` 使用相对 `root` 的路径，Depic 标准化为绝对路径参与现有依赖图计算。
 - `package` 目标根据文件最近的 `package.json` 的 `name` 匹配，无需 AI 标注每个包内文件。
 - 第一版精确支持新增和修改文件。删除和重命名文件只产出诊断：精确分析需要旧版本的依赖图。

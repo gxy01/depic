@@ -10,9 +10,28 @@ English | [中文](https://github.com/gxy01/depic/blob/main/packages/cli/README.
 npm install @depic/cli
 ```
 
+## Agent-assisted impact analysis
+
+The official
+[`depic-impact-analysis`](https://github.com/gxy01/depic/blob/main/skills/depic-impact-analysis/SKILL.md) Skill is
+the recommended entry point when a user asks which pages, routes, jobs, or
+monorepo packages a change may affect:
+
+```bash
+npx skills add gxy01/depic --skill depic-impact-analysis
+```
+
+The Skill owns repository inspection and first-run target discovery. It proposes
+framework-specific `entry` targets and workspace `package` targets, asks the
+user to confirm them, and stores the shared result in `depic.config.json`. This
+CLI owns reproducible execution: it reads the confirmed targets and a unified
+diff, calls `@depic/core`, writes the detailed JSON report, and prints a compact
+summary. Depic itself does not read Git state or invoke an AI model.
+
 ## Commands
 
 ```bash
+depic init [root]          Configure Git rules for .depic artifacts
 depic analyze <root>       Analyze project, output JSON (--dot for Graphviz)
 depic cycles <root>        Detect circular dependencies
 depic dependents <file>    Show files that depend on <file>
