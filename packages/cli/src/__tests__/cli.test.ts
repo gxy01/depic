@@ -1,8 +1,16 @@
 import { describe, it, expect, beforeEach, afterEach } from 'vitest';
-import { mkdtempSync, writeFileSync, mkdirSync, rmSync, readFileSync } from 'node:fs';
+import { mkdtempSync, writeFileSync, rmSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
-import { runAnalyze, runCycles, runDependents, runStats, runWeb } from '../index';
+import {
+  runAnalyze,
+  runCycles,
+  runDependents,
+  runStats,
+  runWeb,
+  runImpact,
+  runInit,
+} from '../index';
 
 describe('CLI commands', () => {
   let tmpDir: string;
@@ -83,5 +91,74 @@ describe('CLI commands', () => {
     const content = readFileSync(outFile, 'utf-8');
     expect(content).toContain('<!DOCTYPE html>');
     expect(content).toContain('__GRAPH__');
+  });
+
+  it('impact writes a JSON report and returns a summary', async () => {
+    const targetsFile = join(tmpDir, 'targets.json');
+    const diffFile = join(tmpDir, 'change.diff');
+    const reportFile = join(tmpDir, 'impact.json');
+    writeFileSync(targetsFile, JSON.stringify([{ kind: 'entry', id: '/', file: 'a.ts', symbol: 'Page' }]));
+    writeFileSync(diffFile, `diff --git a/a.ts b/a.ts
+index 1111111..2222222 100644
+--- a/a.ts
++++ b/a.ts
+@@ -1 +1 @@
+-old
++new
+`);
+
+    const output = await runImpact(tmpDir, diffFile, targetsFile, reportFile);
+
+    expect(output).toContain('Impacted targets: 1 / 1');
+    expect(JSON.parse(readFileSync(reportFile, 'utf-8'))).toMatchObject({
+      impactedTargetCount: 1,
+      impacts: [{ target: { id: '/' }, impact: 'direct' }],
+    });
+  });
+
+  it('impact reads targets from the shared depic config by default', async () => {
+    const diffFile = join(tmpDir, 'change.diff');
+    const reportFile = join(tmpDir, 'impact.json');
+    writeFileSync(join(tmpDir, 'depic.config.json'), JSON.stringify({
+      impact: {
+        targets: [{ kind: 'entry', id: '/', file: 'a.ts', symbol: 'Page' }],
+      },
+    }));
+    writeFileSync(diffFile, `diff --git a/a.ts b/a.ts
+index 1111111..2222222 100644
+--- a/a.ts
++++ b/a.ts
+@@ -1 +1 @@
+-old
++new
+`);
+
+    const output = await runImpact(tmpDir, diffFile, undefined, reportFile);
+
+    expect(output).toContain('Impacted targets: 1 / 1');
+    expect(JSON.parse(readFileSync(reportFile, 'utf-8'))).toMatchObject({
+      impacts: [{ target: { id: '/' }, impact: 'direct' }],
+    });
+  });
+
+  it('init ignores the entire runtime artifact directory', () => {
+    const output = runInit(tmpDir);
+    const gitignore = readFileSync(join(tmpDir, '.gitignore'), 'utf-8');
+
+    expect(output).toContain('Added Depic rules');
+    expect(gitignore).toBe('.depic/\n');
+  });
+
+  it('init migrates selective artifact rules after config moves to the root', () => {
+    writeFileSync(
+      join(tmpDir, '.gitignore'),
+      'node_modules/\n# Depic generated artifacts\n.depic/*\n!.depic/impact-targets.json\n',
+    );
+
+    const output = runInit(tmpDir);
+    const gitignore = readFileSync(join(tmpDir, '.gitignore'), 'utf-8');
+
+    expect(output).toContain('Migrated Depic rules');
+    expect(gitignore).toBe('node_modules/\n.depic/\n');
   });
 });

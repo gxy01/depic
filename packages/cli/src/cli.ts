@@ -1,5 +1,5 @@
 #!/usr/bin/env node
-import { runAnalyze, runCycles, runDependents, runStats, runWeb, runServe, runInit } from './index.js';
+import { runAnalyze, runCycles, runDependents, runStats, runWeb, runServe, runInit, runImpact } from './index.js';
 import { resolve } from 'node:path';
 
 const args = process.argv.slice(2);
@@ -40,6 +40,25 @@ async function main(): Promise<void> {
       process.stdout.write(runInit(root) + '\n');
       break;
     }
+    case 'impact': {
+      const getOption = (name: string): string | undefined => {
+        const index = args.indexOf(name);
+        return index >= 0 ? args[index + 1] : undefined;
+      };
+      const diff = getOption('--diff');
+      const targets = getOption('--targets');
+      const report = getOption('--report');
+      if (!diff || !report) {
+        throw new Error('impact requires --diff <path> and --report <path>.');
+      }
+      process.stdout.write((await runImpact(
+        resolve(args[1]?.startsWith('--') ? '.' : args[1] ?? '.'),
+        resolve(diff),
+        targets ? resolve(targets) : undefined,
+        resolve(report),
+      )) + '\n');
+      break;
+    }
     case 'serve': {
       const root = resolve(args[1] ?? '.');
       const port = parseInt(args[2]) || 3000;
@@ -52,11 +71,13 @@ async function main(): Promise<void> {
       process.stderr.write(`depic — JS/TS dependency analysis
 
 Usage:
-  depic init [root]          Add .depic/ to .gitignore
+  depic init [root]          Configure Git rules for .depic artifacts
   depic analyze <root>       Analyze project, output JSON (--dot for DOT)
   depic cycles <root>        Detect circular dependencies
   depic dependents <file> [root]  Show files that depend on <file>
   depic stats <root>         Show dependency statistics
+  depic impact [root] --diff <path> [--targets <path>] --report <path>
+                              Report potentially impacted entries and packages
   depic web <root> [output]  Generate interactive HTML visualization
   depic serve <root> [port]  Start local web server with live visualization
 `);

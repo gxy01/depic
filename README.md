@@ -31,6 +31,7 @@ A JavaScript/TypeScript dependency analysis toolkit powered by SWC. Parse source
 | `@depic/cli` | Command-line tool | `npm i @depic/cli` |
 | `@depic/web` | Interactive web UI & server | `npm i @depic/web` |
 | `depic-vscode` | VS Code extension | VS Code Marketplace |
+| `depic-impact-analysis` | Official agent skill for change impact analysis | `npx skills add https://github.com/gxy01/depic --skill depic-impact-analysis` |
 
 ## Development
 

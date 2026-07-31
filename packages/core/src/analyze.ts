@@ -7,13 +7,15 @@ import { DependencyGraph } from './graph/index.js';
 import type { AnalyzeOptions } from './types.js';
 import type { FileNode, ImportInfo } from './graph/types.js';
 import type { ParsedFile } from './parser/index.js';
+import { applyDepicConfig } from './config.js';
 
 const DEFAULT_INCLUDE = ['**/*.{ts,tsx,js,jsx}'];
 
 /**
  * 分析项目依赖图。入口函数。
  */
-export async function analyze(options: AnalyzeOptions): Promise<DependencyGraph> {
+export async function analyze(input: AnalyzeOptions): Promise<DependencyGraph> {
+  const options = applyDepicConfig(input);
   const root = options.root;
   const graph = new DependencyGraph();
 

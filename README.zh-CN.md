@@ -29,6 +29,7 @@
 | `@depic/cli` | 命令行工具 | `npm i @depic/cli` |
 | `@depic/web` | 交互式 Web 界面与服务器 | `npm i @depic/web` |
 | `depic-vscode` | VS Code 插件 | VS Code Marketplace |
+| `depic-impact-analysis` | 官方变更影响分析 Agent Skill | `npx skills add https://github.com/gxy01/depic --skill depic-impact-analysis` |
 
 ## 开发
 
