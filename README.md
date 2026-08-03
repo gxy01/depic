@@ -6,7 +6,7 @@ A JavaScript/TypeScript dependency analysis toolkit powered by SWC. Depic turns
 source code into a module dependency graph for exploration, architecture checks,
 interactive visualization, and explainable change impact analysis.
 
-🌐 **[Live Demo →](https://gxy01.github.io/depic/)** — Try depic analyzing itself, with interactive WebGL graph, tree view, and search.
+🌐 **[Live Demo →](https://gxy01.github.io/depic/demo.html)** — Try depic analyzing itself, with interactive WebGL graph, tree view, and search.
 
 ## Use cases
 
