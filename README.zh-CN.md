@@ -46,7 +46,7 @@ Unified diff ──> CLI / API ───────────┤
 `depic.config.json`，再使用 unified diff 运行 Depic 并解释依赖链。
 
 ```bash
-npx skills add gxy01/depic --skill depic-impact-analysis
+npx skills@latest add gxy01/depic --skill depic-impact-analysis
 npm install --save-dev @depic/cli
 ```
 
