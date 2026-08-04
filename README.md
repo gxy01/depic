@@ -49,7 +49,7 @@ and monorepo package targets, store them in `depic.config.json`, run Depic again
 a unified diff, and explain the resulting dependency chains.
 
 ```bash
-npx skills add gxy01/depic --skill depic-impact-analysis
+npx skills@latest add gxy01/depic --skill depic-impact-analysis
 npm install --save-dev @depic/cli
 ```
 

@@ -16,7 +16,7 @@ npm install @depic/cli
 [`depic-impact-analysis`](https://github.com/gxy01/depic/blob/main/skills/depic-impact-analysis/SKILL.md) Skill：
 
 ```bash
-npx skills add gxy01/depic --skill depic-impact-analysis
+npx skills@latest add gxy01/depic --skill depic-impact-analysis
 ```
 
 Skill 负责检查仓库和首次目标发现：提出框架相关的 `entry` 目标与 workspace

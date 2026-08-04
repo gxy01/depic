@@ -18,7 +18,7 @@ the recommended entry point when a user asks which pages, routes, jobs, or
 monorepo packages a change may affect:
 
 ```bash
-npx skills add gxy01/depic --skill depic-impact-analysis
+npx skills@latest add gxy01/depic --skill depic-impact-analysis
 ```
 
 The Skill owns repository inspection and first-run target discovery. It proposes
