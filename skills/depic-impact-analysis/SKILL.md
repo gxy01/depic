@@ -61,12 +61,11 @@ For `entry` targets:
   CLI commands, jobs, or task handlers.
 - For a router, make each resolved route component the entry target, rather than
   treating the router module as the page. Expand declarations such as
-  `const Setting = lazy(() => import('@/routes/Setting'))` and associate the
-  imported component with the `Route` / `GuardRoute` path that renders it. For
-  example, use `{ "id": "/settings", "file": "apps/app/src/routes/Setting/index.tsx" }`,
-  not `apps/app/src/config/router.tsx`, when `/settings` is the surface being
-  assessed. Retain a router module only as an entry for router-wide, layout, or
-  configuration changes.
+  `const SettingsPage = lazy(() => import('@/pages/Settings'))` and associate
+  the imported component with the `Route` / `GuardRoute` path that renders it.
+  Use the route path as the target ID and the resolved page module as `file`,
+  rather than using the router module itself as the page target. Retain a router
+  module only as an entry for router-wide, layout, or configuration changes.
 - Resolve the lazy-import specifier before creating the target. Read the nearest
   `tsconfig.json` / `jsconfig.json` `compilerOptions.baseUrl` and `paths`, then
   applicable bundler aliases. Probe common module candidates (`file.tsx`,
