@@ -1,7 +1,7 @@
 import { analyze, type DependencyGraph } from '@depic/core';
 import { createServer } from 'node:http';
 import { readFileSync, existsSync } from 'node:fs';
-import { resolve, dirname } from 'node:path';
+import { resolve, dirname, relative, sep } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
@@ -25,23 +25,33 @@ function getHtmlShell(): string {
  */
 export async function generateHtml(rootDir: string): Promise<string> {
   const graph = await analyze({ root: rootDir });
-  return generateHtmlFromGraph(graph, rootDir.split('/').pop() ?? rootDir);
+  return generateHtmlFromGraph(graph, rootDir.split('/').pop() ?? rootDir, rootDir);
 }
 
 /**
  * 从已有的 DependencyGraph 生成 HTML。
  */
-export function generateHtmlFromGraph(graph: DependencyGraph, _title: string): string {
+export function generateHtmlFromGraph(
+  graph: DependencyGraph,
+  _title: string,
+  rootDir?: string,
+): string {
   const shell = getHtmlShell();
-  const json = JSON.stringify(toLightweightJSON(graph));
+  const json = JSON.stringify(toLightweightJSON(graph, rootDir));
   return shell.replace('%%GRAPH_JSON%%', json);
 }
 
 /** 精简版序列化：仅含 Graph/Tree 需要的字段，大幅减小体积 */
-export function toLightweightJSON(graph: DependencyGraph): object {
+export function toLightweightJSON(graph: DependencyGraph, rootDir?: string): object {
+  const displayIds = new Map(
+    graph.files().map((file) => [
+      file.id,
+      rootDir ? relative(rootDir, file.id).split(sep).join('/') || '.' : file.id,
+    ]),
+  );
   const fileNodes = graph.files().map((f) => ({
     kind: 'file' as const,
-    id: f.id,
+    id: displayIds.get(f.id) ?? f.id,
     package: f.package,
   }));
   const extNodes = graph.externalModules().map((e) => ({
@@ -52,8 +62,8 @@ export function toLightweightJSON(graph: DependencyGraph): object {
   return {
     nodes: [...fileNodes, ...extNodes],
     edges: graph.edges().map((e) => ({
-      source: e.source,
-      target: e.target,
+      source: displayIds.get(e.source) ?? e.source,
+      target: displayIds.get(e.target) ?? e.target,
       kind: e.kind,
       specifier: e.specifier,
     })),

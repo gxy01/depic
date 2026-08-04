@@ -44,8 +44,7 @@ jobs:
           mkdir -p _site
           cp index.html _site/
           cp -R skills _site/
-          # Copy demo from repo (pre-built) or generate fresh
-          if [ -f demo.html ]; then cp demo.html _site/; fi
+          node packages/cli/dist/cli.js web . _site/demo.html
 
       - name: Upload artifact
         uses: actions/upload-pages-artifact@v3

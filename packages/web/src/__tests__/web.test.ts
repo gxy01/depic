@@ -54,6 +54,8 @@ describe('Web visualization', () => {
 
     expect(html).toContain('<!DOCTYPE html>');
     expect(html).toContain('__GRAPH__');
+    expect(html).toContain('"id":"a.ts"');
+    expect(html).not.toContain(tmpDir);
   });
 
   it('Html contains external node data', async () => {

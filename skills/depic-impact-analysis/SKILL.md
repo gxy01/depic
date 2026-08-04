@@ -59,6 +59,23 @@ For `entry` targets:
 
 - Identify independently invoked surfaces: routes/pages, application bootstraps,
   CLI commands, jobs, or task handlers.
+- For a router, make each resolved route component the entry target, rather than
+  treating the router module as the page. Expand declarations such as
+  `const SettingsPage = lazy(() => import('@/pages/Settings'))` and associate
+  the imported component with the `Route` / `GuardRoute` path that renders it.
+  Use the route path as the target ID and the resolved page module as `file`,
+  rather than using the router module itself as the page target. Retain a router
+  module only as an entry for router-wide, layout, or configuration changes.
+- Resolve the lazy-import specifier before creating the target. Read the nearest
+  `tsconfig.json` / `jsconfig.json` `compilerOptions.baseUrl` and `paths`, then
+  applicable bundler aliases. Probe common module candidates (`file.tsx`,
+  `file.ts`, `file/index.tsx`, `file/index.ts`) and record the resolved relative
+  path. Webpack chunk-name comments are metadata only and must not change the
+  resolved module.
+- If an alias or dynamic import cannot be resolved, do not conclude that its
+  route has no impact. Report the route as `unknown`, include the unresolved
+  specifier and alias source in diagnostics, and manually trace the component
+  only after documenting that fallback.
 - Use a stable, human-readable `id`, such as `/users`, `cli:build`, or `job:sync`.
 - Set `file` to the entry module relative to the project root. Set `symbol` when
   a particular exported function, class, or component names the entry.
@@ -107,19 +124,27 @@ Select one or both target types:
 
 ## Workflow
 
-1. Inspect the project structure and dependency conventions before creating targets.
-2. For requested entry impact, identify real entry points. Prefer route declarations, file-based routes, app bootstrap code, command registration, or task registration. Do not label every imported component or helper as an entry.
-3. For requested package impact, find workspace `package.json` files and use each package's `name`. Include only packages within the requested scope.
-4. Create or update `impact.targets` in `depic.config.json`. Preserve unrelated
+1. Inspect the project structure, dependency conventions, and alias configuration before creating targets.
+2. For requested page/route impact, enumerate route declarations and expand every
+   statically identifiable lazy or dynamic route import to its concrete page
+   component. Create targets for those page components with the route path as
+   the ID; do not label the router aggregator itself as every page. Keep a
+   mapping of `route path -> lazy binding -> resolved component file` so the
+   reported chain can be audited.
+3. For requested non-page entry impact, identify real entry points such as app
+   bootstraps, CLI commands, or task registrations. Do not label every imported
+   component or helper as an entry.
+4. For requested package impact, find workspace `package.json` files and use each package's `name`. Include only packages within the requested scope.
+5. Create or update `impact.targets` in `depic.config.json`. Preserve unrelated
    configuration, keep paths relative to the project root, and make IDs stable.
-5. Run:
+6. Run:
 
    ```bash
    depic impact <root> --diff <diff-file> --report <report-file>
    ```
 
-6. Read the report and present the compact summary first. For every impacted target, state its impact level, changed files, and a representative dependency chain. Link or attach the JSON report when it is useful.
-7. Surface diagnostics. In particular, do not claim precise results for deleted or renamed files, missing targets, or a truncated report.
+7. Read the report and present the compact summary first. For every impacted target, state its impact level, changed files, route-to-component mapping (for page targets), and a representative dependency chain. Link or attach the JSON report when it is useful.
+8. Surface diagnostics. In particular, do not claim precise results for deleted or renamed files, missing targets, a truncated report, or unresolved aliases/lazy imports. An unresolved route is `unknown`, never `none`.
 
 Use the root `depic.config.json` by default. Use `--targets <targets-file>` only
 as a temporary or legacy override. Generated diff files, reports, caches, and
