@@ -5,8 +5,27 @@ import { resolve } from 'node:path';
 const args = process.argv.slice(2);
 const command = args[0];
 
+const usage = `depic — JS/TS dependency analysis
+
+Usage:
+  depic init [root]          Configure Git rules for .depic artifacts
+  depic analyze <root>       Analyze project, output JSON (--dot for DOT)
+  depic cycles <root>        Detect circular dependencies
+  depic dependents <file> [root]  Show files that depend on <file>
+  depic stats <root>         Show dependency statistics
+  depic impact [root] --diff <path> [--targets <path>] --report <path>
+                              Report potentially impacted entries and packages
+  depic web <root> [output]  Generate interactive HTML visualization
+  depic serve <root> [port]  Start local web server with live visualization
+`;
+
 async function main(): Promise<void> {
   switch (command) {
+    case '--help':
+    case '-h': {
+      process.stdout.write(usage);
+      break;
+    }
     case 'analyze': {
       const root = resolve(args[1] ?? '.');
       const dot = args.includes('--dot');
@@ -68,19 +87,7 @@ async function main(): Promise<void> {
       break;
     }
     default:
-      process.stderr.write(`depic — JS/TS dependency analysis
-
-Usage:
-  depic init [root]          Configure Git rules for .depic artifacts
-  depic analyze <root>       Analyze project, output JSON (--dot for DOT)
-  depic cycles <root>        Detect circular dependencies
-  depic dependents <file> [root]  Show files that depend on <file>
-  depic stats <root>         Show dependency statistics
-  depic impact [root] --diff <path> [--targets <path>] --report <path>
-                              Report potentially impacted entries and packages
-  depic web <root> [output]  Generate interactive HTML visualization
-  depic serve <root> [port]  Start local web server with live visualization
-`);
+      process.stderr.write(usage);
       process.exit(1);
   }
 }
