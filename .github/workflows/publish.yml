@@ -3,7 +3,14 @@ name: Publish to npm
 on:
   push:
     tags:
-      - 'v*'   # 推送 v1.0.0 这样的 tag 时触发
+      - 'v[0-9]*.[0-9]*.[0-9]*'
+
+permissions:
+  contents: read
+
+concurrency:
+  group: npm-publish
+  cancel-in-progress: false
 
 jobs:
   publish:
@@ -23,22 +30,74 @@ jobs:
 
       - run: pnpm install --frozen-lockfile
 
-      - run: pnpm build
+      - name: Validate release version
+        id: release
+        run: |
+          version="$(node -p "require('./packages/cli/package.json').version")"
+          test "$(node -p "require('./packages/core/package.json').version")" = "${version}"
+          test "$(node -p "require('./packages/web/package.json').version")" = "${version}"
+          test "${GITHUB_REF_NAME}" = "v${version}"
+          npm_tag=latest
+          if [[ "${version}" == *-* ]]; then npm_tag=next; fi
+          echo "version=${version}" >> "${GITHUB_OUTPUT}"
+          echo "npm-tag=${npm_tag}" >> "${GITHUB_OUTPUT}"
 
-      - run: pnpm test:run
+      - name: Build Web client
+        run: pnpm --filter @depic/web build-client
+
+      - name: Build packages
+        run: pnpm build
+
+      - name: Type check
+        run: pnpm typecheck
+
+      - name: Test
+        run: pnpm test:run
+
+      - name: Pack release artifacts
+        id: pack
+        run: |
+          release_dir="${RUNNER_TEMP}/depic-release"
+          mkdir -p "${release_dir}"
+          pnpm --dir packages/core pack --pack-destination "${release_dir}"
+          pnpm --dir packages/web pack --pack-destination "${release_dir}"
+          pnpm --dir packages/cli pack --pack-destination "${release_dir}"
+          echo "dir=${release_dir}" >> "${GITHUB_OUTPUT}"
+
+      - name: Verify packed files
+        run: |
+          release_dir="${{ steps.pack.outputs.dir }}"
+          version="${{ steps.release.outputs.version }}"
+          tar -tzf "${release_dir}/depic-core-${version}.tgz" | grep -qx 'package/dist/index.js'
+          tar -tzf "${release_dir}/depic-web-${version}.tgz" | grep -qx 'package/dist/index.js'
+          tar -tzf "${release_dir}/depic-web-${version}.tgz" | grep -qx 'package/dist-client/index.html'
+          tar -tzf "${release_dir}/depic-cli-${version}.tgz" | grep -qx 'package/dist/cli.js'
+          node packages/cli/dist/cli.js --help | grep -q 'depic impact'
 
       # 按依赖顺序发布：core → web → cli
       - name: Publish @depic/core
-        run: pnpm publish packages/core --no-git-checks --access public
+        run: >-
+          npm publish
+          "${{ steps.pack.outputs.dir }}/depic-core-${{ steps.release.outputs.version }}.tgz"
+          --access public
+          --tag "${{ steps.release.outputs.npm-tag }}"
         env:
           NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
 
       - name: Publish @depic/web
-        run: pnpm publish packages/web --no-git-checks --access public
+        run: >-
+          npm publish
+          "${{ steps.pack.outputs.dir }}/depic-web-${{ steps.release.outputs.version }}.tgz"
+          --access public
+          --tag "${{ steps.release.outputs.npm-tag }}"
         env:
           NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
 
       - name: Publish @depic/cli
-        run: pnpm publish packages/cli --no-git-checks --access public
+        run: >-
+          npm publish
+          "${{ steps.pack.outputs.dir }}/depic-cli-${{ steps.release.outputs.version }}.tgz"
+          --access public
+          --tag "${{ steps.release.outputs.npm-tag }}"
         env:
           NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}

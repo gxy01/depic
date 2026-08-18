@@ -5,7 +5,7 @@
   "scripts": {
     "test": "vitest",
     "test:run": "vitest run",
-    "build": "rolldown -c rolldown.config.mjs && pnpm --filter @depic/core build && pnpm --filter @depic/web build && pnpm --filter @depic/cli build && pnpm --filter depic-vscode build",
+    "build": "rolldown -c rolldown.config.mjs --clean-dir && pnpm --filter @depic/core build && pnpm --filter @depic/web build && pnpm --filter @depic/cli build && pnpm --filter depic-vscode build",
     "build:demo": "node packages/cli/dist/cli.js web . demo.html",
     "typecheck": "pnpm -r typecheck",
     "lint": "oxlint --config oxlintrc.json packages/*/src",
