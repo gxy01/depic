@@ -100,7 +100,7 @@ the entire `.depic/` runtime artifact directory stays ignored. Review and commit
 the root `depic.config.json` when it should be shared with the team.
 
 For an ephemeral job that cannot modify the manifest, invoke a pinned version with
-`pnpm dlx @depic/cli@0.1.5 impact ...`.
+`pnpm dlx @depic/cli@0.1.7 impact ...`.
 
 ## License
 
