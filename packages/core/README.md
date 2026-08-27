@@ -84,6 +84,21 @@ complete contract.
 `include`, `exclude`, `tsconfigPath`, `extensions`, `symbolLevel`, `workspace`,
 and an `impact` object. Explicit API options override configured values.
 
+To intentionally skip generated changes without deleting graph nodes, pass
+`excludeChangedFiles: ['src/generated/**']` to `analyzeImpact()`, or set
+`impact.excludeChangedFiles` in `depic.config.json`. The API list replaces the
+configured list; `[]` disables configured exclusions. Paths are relative to `root`;
+`*` matches within a path segment, `**` crosses segments, and `**/` also matches
+zero directories. Other characters are literal. Optional `./` and Windows separators
+are normalized. This option is not supported in `0.1.6` or earlier.
+
+Filtering happens before global-change classification and affects only diff paths,
+not discovery or traversal. `diagnostics` contains an `excluded-changed-files`
+warning with sorted, unique `files`; these files are absent from `changedFiles`.
+Even a zero-impact report with this warning means **not analyzed**, not unaffected.
+This is an explicit opt-out, not symbol-level precision or automatic detection of
+generated-code churn.
+
 ## API
 
 ### `analyze(options): Promise<DependencyGraph>`

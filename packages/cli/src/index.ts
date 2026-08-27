@@ -59,6 +59,11 @@ export async function runImpact(
       `- ${impact.target.id} (${impact.target.kind}; ${impact.impact}; ${impact.changedFiles.join(', ')})`,
     ),
   ];
+  for (const diagnostic of report.diagnostics) {
+    if (diagnostic.code === 'excluded-changed-files') {
+      lines.push(`Excluded changed files (not analyzed): ${diagnostic.files?.join(', ')}`);
+    }
+  }
   if (report.diagnostics.length > 0) {
     lines.push(`Diagnostics: ${report.diagnostics.length}`);
   }

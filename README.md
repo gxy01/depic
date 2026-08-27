@@ -59,6 +59,11 @@ or workspace packages. It must ask for confirmation before writing shared
 targets. Depic then performs the deterministic dependency analysis; it does not
 delegate graph reachability to the AI model.
 
+For explicitly ignored generated-file changes, `impact.excludeChangedFiles` filters
+the input diff without removing modules from the dependency graph. Exclusions are
+reported as **not analyzed**, not unaffected. See the CLI guide below (this option
+is not available in `0.1.6` or earlier).
+
 Commit `depic.config.json` when the target map should be shared by the team.
 Generated diffs and reports belong under the ignored `.depic/` directory. See the
 [`@depic/cli` guide](./packages/cli/README.md) for commands and the

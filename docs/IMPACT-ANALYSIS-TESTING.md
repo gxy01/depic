@@ -94,6 +94,20 @@ src/
 - 验证 `--report` 不存在时的约定行为、不可写路径、缺少参数、无效 JSON、无效 diff 和冲突页面 ID 的非零退出码。
 - 断言 CLI 报告与直接调用 `analyzeImpact()` 的核心字段一致。
 - 验证 `depic init` 对新项目整体忽略 `.depic/`，并将旧选择性规则迁移为整目录忽略。
+- 配置 `impact.excludeChangedFiles`，验证摘要出现 `Excluded changed files (not analyzed)`，JSON 记录对应诊断，普通 `analyze` 仍保留完整节点。
+
+### 7. 生成文件变更过滤（Issue #17）
+
+自动化用例：`packages/core/src/impact/__tests__/exclude-changed-files.test.ts`。
+
+- 两个页面经 namespace/barrel 分别消费 `fetchA`、`fetchB`；默认修改 A 时仍保守报告两个页面。
+- 配置 `src/generated/**` 后，修改 A 不触发目标，但诊断明确记录 A 未分析，目标总数不变。
+- 混合修改生成文件与手写依赖：只排除前者，后者仍沿生成模块传播；直接 `analyze()` 的图不变。
+- 覆盖 API 传入、根配置读取、API 替换列表及 `[]` 取消过滤。
+- 覆盖精确路径、单层/跨层 glob、`**/` 零层匹配、路径规范化、正则特殊字符按字面匹配。
+- 覆盖多文件乱序与重复、新增、删除、重命名、未建图文件，以及从排除目录移出的重命名。
+- 覆盖排除全局配置文件、未排除的全局配置文件与排除文件混合输入、报告诊断始终保留。
+- 覆盖非法类型、空模式、绝对路径和越界路径错误；过滤不能绕过 diff 输入验证。
 
 ## 回归门禁
 

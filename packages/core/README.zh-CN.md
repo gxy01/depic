@@ -73,6 +73,17 @@ report.impacts; // [{ target, impact, dependencyChains, ... }]
 `include`、`exclude`、`tsconfigPath`、`extensions`、`symbolLevel`、
 `workspace` 与 `impact`；显式 API 参数优先。
 
+若需要主动忽略生成文件的变更，可向 `analyzeImpact()` 传入
+`excludeChangedFiles: ['src/generated/**']`，或在根配置设置
+`impact.excludeChangedFiles`。API 列表覆盖配置列表，显式 `[]` 可禁用配置中的过滤。
+模式相对于 `root`：`*` 不跨目录，`**` 可跨目录，`**/` 可匹配零层目录；其余字符按字面匹配，
+可选的 `./` 和 Windows 分隔符会被规范化。`0.1.6` 及更早版本不支持该选项。
+
+过滤发生在全局影响判断之前，只作用于 diff 路径，不修改图发现或遍历。被过滤文件不进入
+`changedFiles`；`diagnostics` 中的 `excluded-changed-files` warning 通过 `files`
+列出排序、去重后的路径。即使影响数量为零，也只能解释为“未分析”，不能解释为“无影响”。
+该能力是主动排除策略，不是符号级精度提升，也不会自动识别生成代码噪声。
+
 ## License
 
 MIT

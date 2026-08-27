@@ -53,6 +53,10 @@ npm install --save-dev @depic/cli
 第一次使用时，只需让 Agent 分析某个变更的影响。Skill 会检查仓库并提出
 React 页面、路由、命令、任务或 workspace package 等候选目标；写入共享配置前必须让用户确认。之后由 Depic 进行确定性的依赖分析，依赖图的可达性不会交给 AI 模型猜测。
 
+需要主动忽略生成文件的变更时，可使用 `impact.excludeChangedFiles` 只过滤输入 diff，
+保留依赖图中的模块。报告会明确记录“未分析”，不能解释成“无影响”；用法见下方 CLI 文档
+（`0.1.6` 及更早版本不支持该选项）。
+
 需要团队共享时提交 `depic.config.json`；生成的 diff 和报告放在已忽略的
 `.depic/` 目录。命令用法见 [`@depic/cli` 文档](./packages/cli/README.zh-CN.md)，完整行为与限制见[变更影响分析功能清单](./docs/IMPACT-ANALYSIS-FEATURES.md)。
 

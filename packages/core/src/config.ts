@@ -8,6 +8,8 @@ export const DEPIC_CONFIG_FILE = 'depic.config.json';
 export interface DepicImpactConfig {
   targets?: ImpactTarget[];
   globalImpactPatterns?: string[];
+  /** Root-relative globs excluded from the input diff, not from graph discovery. */
+  excludeChangedFiles?: string[];
   includeTypeOnly?: boolean;
   maxChainsPerTarget?: number;
   maxTotalChains?: number;

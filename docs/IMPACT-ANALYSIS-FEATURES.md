@@ -37,7 +37,7 @@ Depic 从项目根目录的 `depic.config.json` 读取分析与影响配置：
 ```json
 {
   "include": ["src/**/*.{ts,tsx}"],
-  "exclude": ["src/generated/**"],
+  "exclude": ["**/*.test.ts"],
   "tsconfigPath": "./tsconfig.json",
   "impact": {
     "includeTypeOnly": false,
@@ -93,6 +93,8 @@ interface ImpactOptions extends AnalyzeOptions {
   targets?: ImpactTarget[];
   /** 命中即触发全局影响的额外 glob 模式。 */
   globalImpactPatterns?: string[];
+  /** 只过滤输入 diff 的根目录相对 glob，不修改依赖图；默认空数组。 */
+  excludeChangedFiles?: string[];
   /** 是否让 type-only 边参与传播，默认 false。 */
   includeTypeOnly?: boolean;
   /** 每个目标最多保留的依赖链条数。 */
@@ -105,6 +107,22 @@ function analyzeImpact(options: ImpactOptions): Promise<ImpactReport>;
 ```
 
 `ImpactOptions` 复用 `AnalyzeOptions` 的 `include`、`exclude`、`tsconfigPath`、`extensions` 和 `workspace`，以保证依赖图构建规则与既有 `analyze()` 一致。
+
+### 主动排除变更文件（Issue #17）
+
+可在根配置设置 `impact.excludeChangedFiles: ["src/generated/**"]`，或通过 API 同名选项覆盖。
+该能力在 `0.1.6` 及更早版本中不可用。默认不排除；API 列表替换配置列表，显式 `[]` 取消配置过滤。
+
+- 仅过滤从 diff 解析出的文件，不作为顶层 `exclude` 传给 `analyze()`，不移除节点或边。
+- 模式相对于 `root`；支持 `*`（路径段内）、`**`（跨路径段）和 `**/`（零层或多层目录），
+  其他字符按字面匹配，不支持取反或 brace 展开；可选 `./`、Windows 分隔符会被规范化。
+- 非数组、非字符串、空模式、绝对路径及含 `..` 路径段的模式均报错。
+- 过滤发生在全局影响识别及文件状态诊断之前，适用于新增、修改、删除、重命名和未建图文件。
+  删除匹配旧路径，重命名匹配新路径；从生成目录移出的文件不能仅因旧路径命中而被过滤。
+- 匹配文件从 `changedFiles` 和影响触发文件中移除，报告增加 `excluded-changed-files` warning，
+  其 `files` 是排序、去重后的完整过滤列表。全局影响返回和全部文件被过滤时也保留该诊断。
+- 被排除文件仍能作为其他变更的中间依赖节点；被排除的 entry/package 文件仍参与目标发现。
+- “未分析”不等于“无影响”。该选项会主动跳过匹配文件的真实影响，不能默认开启或作为符号级分析替代品。
 
 ## 结果
 
@@ -138,6 +156,7 @@ interface ImpactReport {
 ## 影响计算
 
 1. 验证并解析 unified diff，提取新增/修改/删除/重命名文件及其变更行范围。
+   按 `excludeChangedFiles` 过滤解析后的路径，并记录被过滤文件的诊断。
 2. 使用既有 `analyze()` 和传入的 `AnalyzeOptions` 构建当前工作区依赖图。
 3. 标准化并验证目标；相同目标去重，同一 `id` 映射到不同目标时报错。
 4. 将 `entry` 解析为单个入口文件，将 `package` 解析为包内所有文件。
@@ -159,7 +178,8 @@ depic impact \
 - 标准输出：目标数量、受影响目标、影响级别、关键变更文件和诊断摘要。
 - `--report`：写入完整 JSON 报告，包含依赖链和截断信息。
 - `--targets`：可选的旧格式目标数组，用于临时覆盖根配置。
-- CLI 不列出未受影响目标；调用方可用完整目标清单减去 `impacts` 得到该集合。
+- CLI 不列出未命中的目标；调用方可用完整目标清单减去 `impacts` 得到该集合，
+  但存在过滤或其他不完整分析诊断时，不得将其视为已证明无影响。
 
 ### Git 文件归属
 

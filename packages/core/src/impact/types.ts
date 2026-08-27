@@ -21,6 +21,8 @@ export interface ImpactOptions extends AnalyzeOptions {
   diff: string;
   targets?: ImpactTarget[];
   globalImpactPatterns?: string[];
+  /** Exclude matching diff paths only; graph nodes and edges remain available. */
+  excludeChangedFiles?: string[];
   includeTypeOnly?: boolean;
   maxChainsPerTarget?: number;
   maxTotalChains?: number;
@@ -37,6 +39,7 @@ export interface ImpactDiagnostic {
     | 'deleted-file'
     | 'renamed-file'
     | 'unmapped-file'
+    | 'excluded-changed-files'
     | 'chain-limit-reached';
   message: string;
   files?: string[];

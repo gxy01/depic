@@ -59,6 +59,30 @@ The same config can hold `include`, `exclude`, `tsconfigPath`, `extensions`,
 `symbolLevel`, `workspace`, and impact options. Explicit API or CLI options take
 precedence; `--targets` remains available as a temporary or legacy override.
 
+### Ignore generated changes only
+
+Merge this optional setting into the existing config; keep your `impact.targets`:
+
+```json
+{
+  "impact": {
+    "excludeChangedFiles": ["src/generated/**"]
+  }
+}
+```
+
+Unlike top-level `exclude`, this filters only paths from the diff, not the dependency
+graph. Generated modules can still appear in chains for other changes. Patterns
+are root-relative and support `*` (one segment), `**` (across segments), and `**/`
+(zero or more directories); other characters are literal. Filtering applies before
+global-impact rules, using the old path for deletions and new path for renames.
+
+The summary prints `Excluded changed files (not analyzed): ...`; the JSON report
+includes an `excluded-changed-files` warning with the filtered paths in `files`.
+Do not interpret an excluded change as unaffected. This is an explicit trade-off
+that can hide real impact, not symbol-aware barrel analysis. Version `0.1.6` and
+earlier do not support it; confirm the diagnostic when using a supporting version.
+
 ## CI
 
 Pin `@depic/cli` in the consumer project's `devDependencies`, commit the lockfile,

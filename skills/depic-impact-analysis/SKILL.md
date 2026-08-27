@@ -144,7 +144,7 @@ Select one or both target types:
    ```
 
 7. Read the report and present the compact summary first. For every impacted target, state its impact level, changed files, route-to-component mapping (for page targets), and a representative dependency chain. Link or attach the JSON report when it is useful.
-8. Surface diagnostics. In particular, do not claim precise results for deleted or renamed files, missing targets, a truncated report, or unresolved aliases/lazy imports. An unresolved route is `unknown`, never `none`.
+8. Surface diagnostics. In particular, do not claim precise results for deleted or renamed files, missing targets, a truncated report, or unresolved aliases/lazy imports. An unresolved route is `unknown`, never `none`. Report `excluded-changed-files` paths as deliberately not analyzed, even when the impacted-target count is zero.
 
 Use the root `depic.config.json` by default. Use `--targets <targets-file>` only
 as a temporary or legacy override. Generated diff files, reports, caches, and
@@ -187,3 +187,25 @@ review scope. `EntryTarget.symbol` identifies the target but does not enable
 function-level filtering: a shared file-level aggregator can therefore produce a
 possible impact even when the target uses a different export. Use a separate
 semantic review when deciding whether a change truly affects behavior.
+
+## Optional generated-change filtering
+
+When generated barrels cause broad fan-out, offer semantic review or an explicit
+scope exclusion. If the user chooses exclusion, merge
+`"excludeChangedFiles": ["src/generated/**"]` into the existing `impact` object,
+preserving targets and unrelated settings. Do not automatically exclude generated
+files: this can skip genuine changes, including changes to API behavior.
+
+This option filters diff paths only; generated modules stay in the graph and can
+still explain other changes. Use root-relative patterns: `*` stays within one
+path segment, `**` crosses segments, and `**/` also matches zero directories.
+Do not substitute top-level `exclude`, which changes graph discovery. Deletions
+match their old path, renames their new path; global configuration changes can
+also be suppressed by explicit matching patterns.
+
+Version `0.1.6` and earlier do not support this option. When matching files occur
+in the diff, check that the CLI summary and JSON `excluded-changed-files` diagnostic
+actually list them. If that evidence is absent, do not claim filtering took effect;
+use a supporting CLI release or perform a separately disclosed manual review.
+Explain excluded paths as **not analyzed**, not proven unaffected. Filtering is
+not symbol-level propagation or automatic normalization of generated-code churn.
