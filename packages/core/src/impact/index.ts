@@ -41,8 +41,24 @@ interface ValidTarget {
 export async function analyzeImpact(options: ImpactOptions): Promise<ImpactReport> {
   const root = resolve(options.root);
   const impactConfig = loadDepicConfig(root)?.impact;
-  const diffFiles = parseUnifiedDiff(options.diff);
   const diagnostics: ImpactDiagnostic[] = [];
+  const excludePatterns = normalizeChangedFilePatterns(
+    options.excludeChangedFiles ?? impactConfig?.excludeChangedFiles ?? [],
+  );
+  const excludedFiles = new Set<string>();
+  const diffFiles = parseUnifiedDiff(options.diff).filter((file) => {
+    if (!excludePatterns.some((pattern) => matchGlob(file.path, pattern))) return true;
+    excludedFiles.add(file.path);
+    return false;
+  });
+  if (excludedFiles.size > 0) {
+    diagnostics.push({
+      level: 'warning',
+      code: 'excluded-changed-files',
+      message: 'Changes matching excludeChangedFiles were not analyzed; excluded does not mean unaffected.',
+      files: [...excludedFiles].sort(),
+    });
+  }
   const suppliedTargets = options.targets ?? impactConfig?.targets ?? [];
 
   if (suppliedTargets.length === 0) {
@@ -248,6 +264,7 @@ function findTargetImpact(
   remainingTotalChains: number,
 ): { chains: string[][]; truncated: boolean } {
   const chains: string[][] = [];
+  if (changedFiles.size === 0) return { chains, truncated: false };
   const chainLimit = Math.min(maxChainsPerTarget, remainingTotalChains);
   if (chainLimit < 1) return { chains, truncated: true };
 
@@ -395,11 +412,37 @@ function relativePath(root: string, file: string): string {
   return relative(root, file).split(sep).join('/');
 }
 
+function normalizeChangedFilePatterns(patterns: unknown): string[] {
+  if (!Array.isArray(patterns) || patterns.some((pattern) => typeof pattern !== 'string')) {
+    throw new Error('excludeChangedFiles must be an array of root-relative glob strings.');
+  }
+  return patterns.map((pattern: string) => {
+    const normalized = pattern.replace(/\\/g, '/').replace(/^\.\//, '');
+    if (!normalized.trim() || normalized.startsWith('/') || /^[a-z]:/i.test(normalized)
+      || normalized.split('/').includes('..')) {
+      throw new Error(`excludeChangedFiles pattern "${pattern}" must be a non-empty root-relative glob.`);
+    }
+    return normalized;
+  });
+}
+
 function matchGlob(file: string, pattern: string): boolean {
-  const regex = pattern
-    .replace(/[.+^${}()|[\]\\]/g, '\\$&')
-    .replace(/\*\*/g, '<<DOUBLE_STAR>>')
-    .replace(/\*/g, '[^/]*')
-    .replace(/<<DOUBLE_STAR>>/g, '.*');
+  let regex = '';
+  for (let index = 0; index < pattern.length; index += 1) {
+    const character = pattern[index];
+    if (character === '*' && pattern[index + 1] === '*') {
+      index += 1;
+      if (pattern[index + 1] === '/') {
+        regex += '(?:.*/)?';
+        index += 1;
+      } else {
+        regex += '.*';
+      }
+    } else if (character === '*') {
+      regex += '[^/]*';
+    } else {
+      regex += character.replace(/[.+?^${}()|[\]\\]/g, '\\$&');
+    }
+  }
   return new RegExp(`^${regex}$`).test(file);
 }

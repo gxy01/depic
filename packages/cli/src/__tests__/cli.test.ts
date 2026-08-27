@@ -149,6 +149,29 @@ index 1111111..2222222 100644
     expect(gitignore).toBe('.depic/\n');
   });
 
+  it('impact exposes configured exclusions in both the summary and JSON report', async () => {
+    const diffFile = join(tmpDir, 'change.diff');
+    const reportFile = join(tmpDir, 'impact.json');
+    writeFileSync(join(tmpDir, 'depic.config.json'), JSON.stringify({
+      impact: {
+        targets: [{ kind: 'entry', id: '/', file: 'a.ts' }],
+        excludeChangedFiles: ['b.ts'],
+      },
+    }));
+    writeFileSync(diffFile, 'diff --git a/b.ts b/b.ts\n--- a/b.ts\n+++ b/b.ts\n@@ -1 +1 @@\n-old\n+new\n');
+
+    const output = await runImpact(tmpDir, diffFile, undefined, reportFile);
+
+    expect(output).toContain('Impacted targets: 0 / 1');
+    expect(output).toContain('Excluded changed files (not analyzed): b.ts');
+    expect(JSON.parse(readFileSync(reportFile, 'utf-8'))).toMatchObject({
+      changedFiles: [],
+      impacts: [],
+      diagnostics: [{ code: 'excluded-changed-files', files: ['b.ts'] }],
+    });
+    expect(JSON.parse(await runAnalyze(tmpDir)).nodes).toHaveLength(2);
+  });
+
   it('init migrates selective artifact rules after config moves to the root', () => {
     writeFileSync(
       join(tmpDir, '.gitignore'),

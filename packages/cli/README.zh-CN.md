@@ -55,6 +55,28 @@ depic serve <root> [port]  启动本地 Web 服务器
 `symbolLevel`、`workspace` 和影响分析选项。显式 API/CLI 参数优先；
 `--targets` 仅作为临时或旧配置兼容覆盖。
 
+### 只忽略生成文件的变更
+
+把下面的可选设置合并到已有配置，保留原来的 `impact.targets`：
+
+```json
+{
+  "impact": {
+    "excludeChangedFiles": ["src/generated/**"]
+  }
+}
+```
+
+与顶层 `exclude` 不同，该设置只过滤 diff 路径，不删除图中的模块；分析其他变更时，
+依赖链仍可经过这些生成文件。模式相对于项目根目录，支持 `*`（不跨目录）、`**`（跨目录）
+和 `**/`（零层或多层目录），其他字符按字面匹配。过滤优先于全局影响判断；删除取旧路径，
+重命名取新路径。
+
+CLI 摘要会输出 `Excluded changed files (not analyzed): ...`；JSON 报告通过
+`excluded-changed-files` warning 的 `files` 列出被过滤文件。“被排除”不等于“无影响”，
+它可能跳过真实影响，不是符号级 barrel 分析。`0.1.6` 及更早版本不支持该选项；
+使用支持版本时，也应检查对应诊断以确认过滤确实生效。
+
 ## CI
 
 在使用方项目中将固定版本的 `@depic/cli` 加入 `devDependencies` 并提交 lockfile；CI 通过包管理器执行，不使用全局安装：
