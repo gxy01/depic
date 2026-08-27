@@ -1,0 +1,9 @@
+{
+  "include": ["src/**/*.ts"],
+  "impact": {
+    "targets": [
+      { "kind": "entry", "id": "page-a", "file": "src/pages/page-a.ts" },
+      { "kind": "entry", "id": "page-b", "file": "src/pages/page-b.ts" }
+    ]
+  }
+}
