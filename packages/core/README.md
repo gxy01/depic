@@ -119,6 +119,15 @@ tools or runtime reflection; no per-hunk semantic filtering is performed.
 
 These additions require `0.1.9` or later.
 
+From `0.1.10` (Issue #25), unchanged top-level directive wrappers are
+attached to declaration boundaries instead of absolute code offsets, so growing
+a type does not by itself invalidate refinement. Directive text/order, neighboring
+declarations and adjacent whitespace remain protected; next-line/unknown comments
+also retain physical-line placement, and nested/uncertain attachments stay strict.
+Plain-label HTTP(S) Markdown links in documentation can change without blocking a
+checked no-op; unknown markup and directive-bearing comments remain protected.
+Diff reconstruction preserves unchanged EOF newlines. These fixes require `0.1.10` or later.
+
 `analyze()` and `analyzeImpact()` both load `depic.config.json`. The file accepts
 `include`, `exclude`, `tsconfigPath`, `extensions`, `symbolLevel`, `workspace`,
 and an `impact` object. Explicit API options override configured values.

@@ -87,6 +87,11 @@ equivalence): ...` and a `semantic-noop` diagnostic. They were checked, unlike
 comments must not disappear. This is whole-file AST comparison, not general
 semantic equivalence or mixed-hunk filtering. Both features require `0.1.9` or later.
 
+Use `0.1.10+` for unchanged top-level directive wrappers and plain-label HTTP(S)
+Markdown documentation links: these no longer block supported refinement merely
+because earlier declarations grow or a documentation URL changes. Directive edits
+and uncertain attachments still fall back; no configuration change is needed.
+
 ### Ignore generated changes only
 
 Merge this optional setting into the existing config; keep your `impact.targets`:
@@ -128,7 +133,7 @@ the entire `.depic/` runtime artifact directory stays ignored. Review and commit
 the root `depic.config.json` when it should be shared with the team.
 
 For an ephemeral job that cannot modify the manifest, invoke a pinned version with
-`pnpm dlx @depic/cli@0.1.9 impact ...`.
+`pnpm dlx @depic/cli@0.1.10 impact ...`.
 
 ## License
 

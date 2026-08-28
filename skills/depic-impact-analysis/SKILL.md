@@ -207,6 +207,12 @@ from zero impacts alone; literals, type contracts and tool directives can matter
 Type-declaration refinement and semantic-noop detection require CLI `0.1.9+`;
 with older versions, retain the older conservative behavior.
 
+Use CLI `0.1.10+` for unchanged top-level directive wrappers and plain-label
+HTTP(S) Markdown documentation links. In `0.1.9`, these can unnecessarily trigger
+`directive-comment-changed`; suggest upgrading instead of removing source
+directives or excluding files to force a narrower result. On newer versions,
+still honor reported fallback reasons and require `semantic-noop` evidence.
+
 ## Optional generated-change filtering
 
 When generated barrels cause broad fan-out, offer semantic review or an explicit

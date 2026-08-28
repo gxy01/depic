@@ -34,4 +34,9 @@ describe('checked diff to symbol mapping', () => {
   it('recognizes a checked comment-only change outside declarations', () => {
     expect(classify('// new\nexport const a = 1;\n', '@@ -1 +1 @@\n-// old\n+// new\n')).toEqual([]);
   });
+
+  it.each(['', '\n', '\n\n'])('preserves EOF trivia after a trailing directive: %j', (ending) => {
+    const source = '// new\nexport const a = 1;\n/* eslint-enable */' + ending;
+    expect(classify(source, '@@ -1 +1 @@\n-// old\n+// new\n')).toEqual([]);
+  });
 });
