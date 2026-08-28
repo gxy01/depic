@@ -31,7 +31,7 @@ describe('checked diff to symbol mapping', () => {
     expect(() => classify('export const a = 1;\n', patch)).toThrow();
   });
 
-  it('falls back on changes outside declarations', () => {
-    expect(() => classify('// new\nexport const a = 1;\n', '@@ -1 +1 @@\n-// old\n+// new\n')).toThrow('change-outside-declaration');
+  it('recognizes a checked comment-only change outside declarations', () => {
+    expect(classify('// new\nexport const a = 1;\n', '@@ -1 +1 @@\n-// old\n+// new\n')).toEqual([]);
   });
 });

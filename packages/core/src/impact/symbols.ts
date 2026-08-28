@@ -16,7 +16,7 @@ export class SymbolImpactAnalyzer {
   private ancestors = new Map<string, Set<string>>();
   private changes = new Map<string, string[] | SymbolFallback>();
 
-  constructor(private root: string, edges: Edge[]) {
+  constructor(private root: string, edges: Edge[], private includeTypeOnly = false) {
     for (const edge of edges) {
       const outgoing = this.outgoing.get(edge.source) ?? [];
       outgoing.push(edge);
@@ -27,19 +27,50 @@ export class SymbolImpactAnalyzer {
     }
   }
 
-  private module(file: string): SymbolModule {
+  private source(file: string): { source: string; module: SymbolModule } {
     let cached = this.modules.get(file);
     if (!cached) {
       try {
         const source = readFileSync(file, 'utf8');
-        cached = { source, module: parseSymbolModule(source, file) };
+        cached = { source, module: parseSymbolModule(source, file, this.includeTypeOnly) };
         this.modules.set(file, cached);
       } catch {
         throw new SymbolFallback('source-unavailable');
       }
     }
-    if (cached.module.fallbackReason) throw new SymbolFallback(cached.module.fallbackReason);
-    return cached.module;
+    return cached;
+  }
+
+  private module(file: string): SymbolModule {
+    const { module } = this.source(file);
+    if (module.fallbackReason) throw new SymbolFallback(module.fallbackReason);
+    return module;
+  }
+
+  private changed(file: string, patch: string | undefined): string[] {
+    let symbols = this.changes.get(file);
+    if (!symbols) {
+      try {
+        if (!patch) throw new SymbolFallback('unsupported-diff');
+        const { source, module } = this.source(file);
+        symbols = changedSymbols(source, patch, file, module, this.includeTypeOnly);
+      } catch (error) {
+        if (!(error instanceof SymbolFallback)) throw error;
+        symbols = error;
+      }
+      this.changes.set(file, symbols);
+    }
+    if (symbols instanceof SymbolFallback) throw symbols;
+    return symbols;
+  }
+
+  isSemanticNoop(file: string, patch: string | undefined): boolean {
+    try {
+      return this.changed(file, patch).length === 0;
+    } catch (error) {
+      if (!(error instanceof SymbolFallback)) throw error;
+      return false;
+    }
   }
 
   private reverseReachable(file: string): Set<string> {
@@ -57,8 +88,7 @@ export class SymbolImpactAnalyzer {
   }
 
   /** Undefined means there is no file-level path to refine. */
-  evaluate(targetId: string, entries: string[], changedFile: string, patch: string | undefined,
-    includeTypeOnly: boolean): ImpactSymbolEvidence | undefined {
+  evaluate(targetId: string, entries: string[], changedFile: string, patch: string | undefined): ImpactSymbolEvidence | undefined {
     const ancestors = this.reverseReachable(changedFile);
     const roots = entries.filter((file) => ancestors.has(file));
     if (roots.length === 0) return undefined;
@@ -68,20 +98,7 @@ export class SymbolImpactAnalyzer {
     };
     try {
       if (entries.includes(changedFile)) throw new SymbolFallback('target-file-changed');
-      if (includeTypeOnly) throw new SymbolFallback('type-only-analysis');
-      if (!patch) throw new SymbolFallback('unsupported-diff');
-      let symbols = this.changes.get(changedFile);
-      if (!symbols) {
-        try {
-          const module = this.module(changedFile);
-          symbols = changedSymbols(this.modules.get(changedFile)!.source, patch, changedFile, module);
-        } catch (error) {
-          if (!(error instanceof SymbolFallback)) throw error;
-          symbols = error;
-        }
-        this.changes.set(changedFile, symbols);
-      }
-      if (symbols instanceof SymbolFallback) throw symbols;
+      const symbols = this.changed(changedFile, patch);
       evidence.changedSymbols = symbols;
 
       let budget = 10_000;

@@ -40,6 +40,7 @@ export interface ImpactDiagnostic {
     | 'renamed-file'
     | 'unmapped-file'
     | 'excluded-changed-files'
+    | 'semantic-noop'
     | 'chain-limit-reached';
   message: string;
   files?: string[];

@@ -77,10 +77,24 @@ report.impacts; // [{ target, impact, dependencyChains, ... }]
 
 这不是通用 JS 数据流分析：动态访问、namespace 整体传递、导出歧义/循环、副作用、
 不支持的语法（包括 class 和复杂初始化）、失配/缺失 hunk、模块结构变化及预算耗尽
-都保留文件级结果。目标自身/所属包变更仍直接命中，类型契约分析仍按文件传播。
+都保留文件级结果。目标自身/所属包变更仍直接命中，`0.1.8` 的类型契约分析仍按文件传播。
 `EntryTarget.symbol` 仍是标识，入口内所有声明都作为起点；现有 `dependencyChains`
 和图 API 仍是文件级，符号来源看 `symbolEvidence.chain`。无需新增配置，
 `excludeChangedFiles` 仍是独立的主动排除策略。
+
+#### 类型契约与纯注释/格式变更（0.1.9+）
+
+开启 `includeTypeOnly: true` 后，支持 interface/type-alias、类型注解及类型导入/re-export
+的声明级精化。修改 `UserConfig` 可排除同文件其他类型的消费者，但所有使用 `UserConfig`
+的目标仍命中，不区分字段。索引访问、条件/映射/import type、声明合并/重名、副作用和
+来源歧义继续回退；类型/运行时导入切换不会丢失。默认 `includeTypeOnly: false` 不变。
+
+对非全局的修改文件，校验 diff 并比较完整运行时和类型 AST；仅整个文件结构相同且指令
+注释保持不变时，才从传播中移除，包括目标自身/所属包文件。`semantic-noop` 诊断列出路径，
+这些路径不再进入 `changedFiles`，但图节点保留。这表示“已检查”，不是配置排除的“未分析”。
+字面量原始内容、工具指令和未知标记注释受保护；指令变化/移动、解析不确定、过期 hunk、
+混合有效变更等继续保守处理，全局配置规则仍优先。AST 等价不是对所有源码读取工具或
+运行时反射的行为证明；暂不逐 hunk 消除语义噪声。这两项能力需要 `0.1.9` 或更高版本。
 
 `analyze()` 和 `analyzeImpact()` 都会读取 `depic.config.json`。该文件可配置
 `include`、`exclude`、`tsconfigPath`、`extensions`、`symbolLevel`、

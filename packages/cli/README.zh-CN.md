@@ -68,6 +68,17 @@ CLI 摘要按“目标/变更文件”显示精化/文件级数量及回退原�
 `chain` 或 `fallbackReason`。原 `dependencyChains` 仍是文件级链路。无需配置排除规则，
 也不改变依赖图查询的语义。
 
+### 类型契约与纯注释/格式变更（0.1.9+）
+
+在已有 `depic.config.json` 中设置 `impact.includeTypeOnly: true`，启用受支持的
+interface/type-alias 传播。`changedSymbols` 标识声明，不是字段；两个目标都使用
+`UserConfig` 时仍会同时命中。不支持的类型、声明合并、副作用或来源歧义保持明确的文件级回退。
+
+经校验的纯注释/排版文件会输出 `Semantic no-op files (checked AST equivalence): ...`
+和 `semantic-noop` 诊断，表示“已检查”，不同于排除规则的“未分析”。运行时/类型变更和
+指令注释变化不能被忽略。这是整个文件的 AST 对比，不是通用语义等价或混合 hunk 过滤。
+这两项新增能力需要 `0.1.9` 或更高版本。
+
 ### 只忽略生成文件的变更
 
 把下面的可选设置合并到已有配置，保留原来的 `impact.targets`：
@@ -105,7 +116,7 @@ pnpm exec depic impact . \
 运行产物目录保持忽略。需要团队共享时，请审查并提交根目录的
 `depic.config.json`。
 
-无法修改依赖清单的临时任务可使用 `pnpm dlx @depic/cli@0.1.8 impact ...`，并显式固定版本。
+无法修改依赖清单的临时任务可使用 `pnpm dlx @depic/cli@0.1.9 impact ...`，并显式固定版本。
 
 ## License
 

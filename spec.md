@@ -286,6 +286,9 @@ const dependents = graph.getDependents('/project/src/utils/format.ts');
 不支持的语法或不确定来源保持文件级结果；`getTransitiveDependencies()` 等图 API 不变。
 具体边界和验收见 [影响分析功能清单](docs/IMPACT-ANALYSIS-FEATURES.md)。
 
+自 `0.1.9` 起，复用 `includeTypeOnly` 进行类型声明级传播，并以 `semantic-noop` 诊断记录
+经校验的整文件普通注释/格式变更。类型字段级精度、通用语义等价和逐 hunk 语义过滤不在范围内。
+
 ```typescript
 // 文件里用的 formatDate 到底是从哪来的？
 // 特别是经过多层 re-export 时

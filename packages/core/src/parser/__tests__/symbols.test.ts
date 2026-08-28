@@ -20,6 +20,27 @@ describe('symbol proof parser', () => {
     expect(parseSymbolModule(source, 'test.ts').declarations.get('foo')).toMatchObject({ startLine: 2, endLine: 2 });
   });
 
+  it('collects interface/type declarations, annotation references and qualified type provenance', () => {
+    const source = readFileSync(new URL('./fixtures/ts/symbol-contracts.ts', import.meta.url), 'utf8');
+    const module = parseSymbolModule(source, 'contracts.ts', true);
+    expect(module.fallbackReason).toBeUndefined();
+    expect(module.declarations.get('Config')).toMatchObject({ kind: 'type', startLine: 4, endLine: 4 });
+    expect(module.exports.get('PublicUser')).toEqual({ name: 'User', source: './models', isTypeOnly: true });
+    expect(module.declarations.get('Response')?.references).toContainEqual({ name: 'models', members: ['Error'] });
+    expect(module.declarations.get('handle')?.references).toContainEqual({ name: 'Response', members: [] });
+    const runtime = parseSymbolModule(source, 'contracts.ts');
+    expect(runtime.declarations.has('Config')).toBe(false);
+    expect(runtime.imports.has('models')).toBe(false);
+  });
+
+  it.each([
+    'import { Foo } from "./foo"; type Foo = string; export const f = () => Foo;',
+    'type Foo = string; import { Foo } from "./foo"; export const f = () => Foo;',
+    'export type { Foo } from "./a"; export { Foo } from "./b";',
+  ])('does not resolve ambiguous type/value name collisions optimistically', (source) => {
+    expect(parseSymbolModule(source, 'test.ts', true).fallbackReason).toBe('duplicate-binding');
+  });
+
   it.each([
     'export class A { static value = effect(); }',
     'export const value = effect();',

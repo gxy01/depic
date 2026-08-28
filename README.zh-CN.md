@@ -57,6 +57,9 @@ React 页面、路由、命令、任务或 workspace package 等候选目标；�
 减少 barrel 带来的无关目标。不确定时仍保留文件级影响；`symbolEvidence` 记录精化判断
 和回退原因。现有文件级依赖图查询不变。
 
+从 `0.1.9` 起，经校验的纯注释/格式变更可记录为 `semantic-noop`；开启 `includeTypeOnly`
+后还可按声明精化 interface/type-alias 的影响。这两项新增能力需要 `0.1.9` 或更高版本。
+
 需要主动忽略生成文件的变更时，可使用 `impact.excludeChangedFiles` 只过滤输入 diff，
 保留依赖图中的模块。报告会明确记录“未分析”，不能解释成“无影响”；用法见下方 CLI 文档
 （`0.1.6` 及更早版本不支持该选项）。

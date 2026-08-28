@@ -63,6 +63,9 @@ export async function runImpact(
     if (diagnostic.code === 'excluded-changed-files') {
       lines.push(`Excluded changed files (not analyzed): ${diagnostic.files?.join(', ')}`);
     }
+    if (diagnostic.code === 'semantic-noop') {
+      lines.push(`Semantic no-op files (checked AST equivalence): ${diagnostic.files?.join(', ')}`);
+    }
   }
   if (report.diagnostics.length > 0) {
     lines.push(`Diagnostics: ${report.diagnostics.length}`);

@@ -18,6 +18,16 @@
   应恢复 2/2 并给出 `precision: 'file'` 与 `fallbackReason`。
 - 验证 `excludeChangedFiles` 仍产生“未分析”诊断，不能充当符号精度证明。
 
+## Issue #22/#23 回归（0.1.9）
+
+- `type-noop-impact.test.ts`：interface/type-alias、类型别名/namespace/inline 导入、返回值注解，
+  同类型两个字段仍都命中，不同类型消费者被剔除；复杂类型、合并、类型/运行时切换、副作用回退。
+- `parser/__tests__/semantic.test.ts`：普通注释/格式、运行时及类型结构保留、字面量边界、
+  指令内容/锚点/空白、JSDoc 契约和未知标记注释保护。
+- CLI：从统一配置读取 `includeTypeOnly`；JSON 与摘要均区分 `semantic-noop` 与主动排除。
+- 复验 Issue #20 的 runtime 精化、图查询不变、全局规则、混合文件变更、过期 diff 及新增文件。
+- 验证构建后及从 npm 全新安装的 `0.1.9` CLI 输出，不能只依赖单元测试；`0.1.8` 不支持这些新增能力。
+
 ## 分层策略
 
 | 层级 | 位置 | 覆盖内容 |
