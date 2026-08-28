@@ -188,11 +188,28 @@ depic impact \
 - `depic init` 写入 `.depic/` 忽略规则，并把短期存在过的选择性规则迁移回整目录忽略。
 - CLI 不执行 `git add` 或 `git commit`；是否提交根配置由用户决定。
 
+## 符号级精化（0.1.8 / Issue #20）
+
+- 在文件可达性基础上，对实际匹配当前源码的 unified hunks 反向还原旧源码，将新增/删除行
+  映射到顶层声明；旧/新模块结构必须一致。无需读取 Git 或增加配置。
+- 支持函数、函数表达式/箭头函数和简单常量声明，沿局部 helper 引用、具名/别名
+  re-export、`export *`、`export * as ns`、namespace 静态成员（含 `ns['member']`）追踪。
+- 只有完整追踪证明不相交时才剔除目标。动态成员、namespace 整体传递、歧义/循环导出、
+  顶层副作用/副作用导入、class/复杂初始化等不支持语法、结构变化、diff 失配和预算耗尽
+  均保留文件级结果。类型契约分析不精化；目标自身/所属 package 文件变更仍直接命中。
+- 不把 `EntryTarget.symbol` 当作过滤条件：入口文件内全部声明作为起点。
+- `symbolEvidence` 按目标和变更文件输出（包括被剔除候选）：`targetId`、`changedFile`、
+  `precision: 'symbol' | 'file'`、`affected`、可选 `changedSymbols`、符号 `chain` 或
+  `fallbackReason`。全局影响不做符号判断，可省略此字段。
+- 既有 `dependencyChains` 和图 API 保持文件级语义；符号来源看 `symbolEvidence.chain`。
+  CLI 摘要显示精化/文件级判断数量与回退原因。证据不是行为正确性证明。
+- 精化先于链数限制；`excludeChangedFiles` 独立且更早执行，不作为精化手段。
+
 ## 非目标
 
 - 不在 Depic 内部识别路由、框架组件、页面或任务入口。
 - 不基于 LLM 判断代码改动是否真的改变用户可见行为。
-- 第一版不以函数级依赖来过滤入口影响；`EntryTarget.symbol` 仅用于展示和稳定标识。
-- 共享聚合模块只要在文件级依赖链上可达就会保守地传播影响，即使入口实际使用的是该文件中的另一个 symbol。
+- 不做完整 JavaScript 数据流/类型推导；`EntryTarget.symbol` 仅用于展示和稳定标识。
+- 未能通过上述符号证明的共享聚合模块仍按文件级可达性保守传播。
 - 第一版不对删除/重命名提供精确影响结论。
 - 第一版不生成 Markdown 详细报告；JSON 是机器可读的正式输出。

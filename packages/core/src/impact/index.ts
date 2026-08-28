@@ -3,12 +3,14 @@ import { analyze } from '../analyze.js';
 import type { DependencyGraph } from '../graph/index.js';
 import type { Edge } from '../graph/types.js';
 import { loadDepicConfig } from '../config.js';
+import { SymbolImpactAnalyzer } from './symbols.js';
 import type {
   ImpactDiagnostic,
   ImpactOptions,
   ImpactReport,
   ImpactTarget,
   TargetImpact,
+  ImpactSymbolEvidence,
 } from './types.js';
 
 const DEFAULT_MAX_CHAINS_PER_TARGET = 20;
@@ -27,6 +29,7 @@ const DEFAULT_GLOBAL_IMPACT_PATTERNS = [
 
 interface DiffFile {
   path: string;
+  patch: string;
   status: 'added' | 'modified' | 'deleted' | 'renamed';
 }
 
@@ -153,13 +156,29 @@ export async function analyzeImpact(options: ImpactOptions): Promise<ImpactRepor
   let totalChainCount = 0;
   let reportTruncated = false;
   const impacts: TargetImpact[] = [];
+  const symbolEvidence: ImpactSymbolEvidence[] = [];
+  const includeTypeOnly = options.includeTypeOnly ?? impactConfig?.includeTypeOnly ?? false;
+  const symbolAnalyzer = new SymbolImpactAnalyzer(root, graph.edges()
+    .filter((edge) => graph.getFileNode(edge.target))
+    .filter((edge) => includeTypeOnly || !isTypeOnlyEdge(edge, graph)));
 
   for (const target of targets) {
+    const targetChanges = new Set(changedAbsoluteFiles);
+    for (const file of stableChangedFiles) {
+      const absolute = toAbsolutePath(root, file);
+      const patches = diffFiles.filter((item) => item.path === file);
+      const patch = patches.length === 1 && patches[0].status === 'modified' ? patches[0].patch : undefined;
+      const evidence = symbolAnalyzer.evaluate(target.target.id, target.entryFiles, absolute, patch, includeTypeOnly);
+      if (evidence) {
+        symbolEvidence.push(evidence);
+        if (!evidence.affected) targetChanges.delete(absolute);
+      }
+    }
     const result = findTargetImpact(
       target,
       graph,
-      changedAbsoluteFiles,
-      options.includeTypeOnly ?? impactConfig?.includeTypeOnly ?? false,
+      targetChanges,
+      includeTypeOnly,
       maxChainsPerTarget,
       maxTotalChains - totalChainCount,
     );
@@ -196,6 +215,7 @@ export async function analyzeImpact(options: ImpactOptions): Promise<ImpactRepor
     impacts: impacts.sort((a, b) => a.target.id.localeCompare(b.target.id)),
     diagnostics,
     truncated: reportTruncated,
+    symbolEvidence,
   };
 }
 
@@ -384,6 +404,7 @@ function parseUnifiedDiff(diff: string): DiffFile[] {
     const path = isDeleted ? oldPath : defaultNewPath;
     files.push({
       path: normalizeRelativePath(path),
+      patch: block,
       status: isRenamed ? 'renamed' : isDeleted ? 'deleted' : isAdded ? 'added' : 'modified',
     });
   }

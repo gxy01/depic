@@ -55,6 +55,19 @@ depic serve <root> [port]  启动本地 Web 服务器
 `symbolLevel`、`workspace` 和影响分析选项。显式 API/CLI 参数优先；
 `--targets` 仅作为临时或旧配置兼容覆盖。
 
+### 符号级影响精化（0.1.8+）
+
+对支持的代码，影响分析自动沿具名/别名 re-export、星号 barrel 和静态 namespace
+成员追踪变更声明。只修改 `fetchA`，不再必然影响只调用 `generatedClient.fetchB()`
+的页面。diff 必须与变更后源码一致；无法确认来源、动态访问/整体传递 namespace、
+副作用、结构变化和不支持的语法均保留文件级影响。`EntryTarget.symbol` 仍是标识，
+不会限制为只分析入口文件中的某个函数。
+
+CLI 摘要按“目标/变更文件”显示精化/文件级数量及回退原因；JSON 的 `symbolEvidence`
+记录受影响和被剔除的判断，包含 `precision`、`affected`、`changedSymbols`、符号
+`chain` 或 `fallbackReason`。原 `dependencyChains` 仍是文件级链路。无需配置排除规则，
+也不改变依赖图查询的语义。
+
 ### 只忽略生成文件的变更
 
 把下面的可选设置合并到已有配置，保留原来的 `impact.targets`：
@@ -92,7 +105,7 @@ pnpm exec depic impact . \
 运行产物目录保持忽略。需要团队共享时，请审查并提交根目录的
 `depic.config.json`。
 
-无法修改依赖清单的临时任务可使用 `pnpm dlx @depic/cli@0.1.7 impact ...`，并显式固定版本。
+无法修改依赖清单的临时任务可使用 `pnpm dlx @depic/cli@0.1.8 impact ...`，并显式固定版本。
 
 ## License
 

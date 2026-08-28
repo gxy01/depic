@@ -69,6 +69,19 @@ report.impacts; // [{ target, impact, dependencyChains, ... }]
 
 `EntryTarget.file` 相对于 `root`。默认忽略 type-only 导入；需要分析类型契约影响时传入 `includeTypeOnly: true`。`package.json` 等配置变更会以全局影响返回。依赖链按最短路径优先，纯 re-export barrel 不会把直接影响误分为传递影响。完整约定见仓库中的 [`IMPACT-ANALYSIS-FEATURES.md`](../../docs/IMPACT-ANALYSIS-FEATURES.md)。
 
+从 `0.1.8` 起，`analyzeImpact()` 自动尝试符号级精化：校验 diff 与当前源码一致，
+将编辑行映射到声明，追踪私有 helper、具名/别名 re-export、`export *` 和静态 namespace
+成员（含字符串字面量访问）。`report.symbolEvidence` 为每个候选“目标/变更文件”记录
+`precision`、`affected`、`changedSymbols`、受影响符号 `chain` 或保守回退的
+`fallbackReason`；被剔除目标也保留证据。
+
+这不是通用 JS 数据流分析：动态访问、namespace 整体传递、导出歧义/循环、副作用、
+不支持的语法（包括 class 和复杂初始化）、失配/缺失 hunk、模块结构变化及预算耗尽
+都保留文件级结果。目标自身/所属包变更仍直接命中，类型契约分析仍按文件传播。
+`EntryTarget.symbol` 仍是标识，入口内所有声明都作为起点；现有 `dependencyChains`
+和图 API 仍是文件级，符号来源看 `symbolEvidence.chain`。无需新增配置，
+`excludeChangedFiles` 仍是独立的主动排除策略。
+
 `analyze()` 和 `analyzeImpact()` 都会读取 `depic.config.json`。该文件可配置
 `include`、`exclude`、`tsconfigPath`、`extensions`、`symbolLevel`、
 `workspace` 与 `impact`；显式 API 参数优先。

@@ -184,4 +184,24 @@ index 1111111..2222222 100644
     expect(output).toContain('Migrated Depic rules');
     expect(gitignore).toBe('node_modules/\n.depic/\n');
   });
+
+  it('impact exposes symbol refinement and conservative fallback in CLI and JSON', async () => {
+    writeFileSync(join(tmpDir, 'a.ts'), 'export const fetchA = () => "new";\n');
+    writeFileSync(join(tmpDir, 'b.ts'), 'export const fetchB = () => "b";\n');
+    writeFileSync(join(tmpDir, 'barrel.ts'), 'export * from "./a"; export * from "./b";');
+    writeFileSync(join(tmpDir, 'page.ts'), 'import * as api from "./barrel"; export const page = () => api.fetchB();');
+    writeFileSync(join(tmpDir, 'depic.config.json'), JSON.stringify({
+      impact: { targets: [{ kind: 'entry', id: 'page', file: 'page.ts' }] },
+    }));
+    const diff = join(tmpDir, 'change.diff');
+    const report = join(tmpDir, 'impact.json');
+    writeFileSync(diff, 'diff --git a/a.ts b/a.ts\n--- a/a.ts\n+++ b/a.ts\n@@ -1 +1 @@\n-export const fetchA = () => "old";\n+export const fetchA = () => "new";\n');
+    const output = await runImpact(tmpDir, diff, undefined, report);
+    expect(output).toContain('Impacted targets: 0 / 1');
+    expect(output).toContain('Symbol analysis: 1 refined, 0 file-level');
+    expect(JSON.parse(readFileSync(report, 'utf8')).symbolEvidence[0]).toMatchObject({ precision: 'symbol', affected: false });
+    writeFileSync(join(tmpDir, 'page.ts'), 'import * as api from "./barrel"; export const page = (key: string) => api[key]();');
+    expect(await runImpact(tmpDir, diff, undefined, report)).toContain('File-level reasons: dynamic-member');
+    expect(JSON.parse(readFileSync(report, 'utf8')).symbolEvidence[0]).toMatchObject({ precision: 'file', affected: true });
+  });
 });

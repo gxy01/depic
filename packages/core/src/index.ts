@@ -31,6 +31,7 @@ export type {
   ImpactDiagnostic,
   TargetImpact,
   ImpactReport,
+  ImpactSymbolEvidence,
 } from './impact/types.js';
 export { DependencyGraph } from './graph/index.js';
 export type { AnalyzeOptions } from './types.js';

@@ -59,6 +59,11 @@ or workspace packages. It must ask for confirmation before writing shared
 targets. Depic then performs the deterministic dependency analysis; it does not
 delegate graph reachability to the AI model.
 
+From `0.1.8`, impact analysis can follow changed declarations through named/star
+reexports and static namespace members, reducing unrelated barrel consumers.
+Uncertain cases retain file-level impact; `symbolEvidence` explains both refined
+decisions and fallback reasons. This does not change file-level graph queries.
+
 For explicitly ignored generated-file changes, `impact.excludeChangedFiles` filters
 the input diff without removing modules from the dependency graph. Exclusions are
 reported as **not analyzed**, not unaffected. See the CLI guide below (this option

@@ -183,10 +183,16 @@ them unless the user explicitly requests a durable report artifact.
 - `global`: A configuration change requires validating every supplied target; no dependency chain is implied.
 
 Chains are reported shortest-first. Treat the output as a conservative test and
-review scope. `EntryTarget.symbol` identifies the target but does not enable
-function-level filtering: a shared file-level aggregator can therefore produce a
-possible impact even when the target uses a different export. Use a separate
-semantic review when deciding whether a change truly affects behavior.
+review scope. In CLI `0.1.8+`, `symbolEvidence` refines supported declaration edits
+through named/star reexports and static namespace members. Inspect `precision`,
+`affected`, `changedSymbols`, and the symbol `chain`; pruned targets also have
+evidence. Explain `precision: "file"` using its `fallbackReason`, not as a proven
+symbol dependency. Dynamic/escaped namespaces, effects, ambiguous exports,
+unsupported syntax and unverified hunks remain conservative. Older releases
+without this evidence remain file-level; do not claim the refinement ran.
+`EntryTarget.symbol` is still an identifier, not a function-only scope filter.
+Existing `dependencyChains` are file paths; symbol provenance is in
+`symbolEvidence.chain`. Use semantic review to assess actual behavior changes.
 
 ## Optional generated-change filtering
 

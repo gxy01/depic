@@ -4,6 +4,20 @@
 
 验证通用变更影响分析能够从统一 diff 和目标清单中稳定地产生保守、可解释的 entry/package 影响结果；同时验证其不会将输入错误、不可分析文件或配置类变更伪装成普通依赖关系。
 
+## Issue #20 回归与发布验真
+
+- `parser/__tests__/symbols.test.ts`：导出来源、别名、namespace、UTF-8 行号及不支持语法。
+- `impact/__tests__/symbol-diff.test.ts`：多 hunk、零上下文增删行、失配/畸形/缺失 hunk、声明外变更。
+- `impact/__tests__/symbol-impact.test.ts`：A/B namespace 复现、私有 helper、具名/默认导出、
+  动态访问/整体传递、歧义/循环、副作用、模块结构变化、package 自身变更及精化先于链数限制。
+- `cli/__tests__/cli.test.ts`：摘要和 JSON 同时呈现符号判断与回退，排除规则仍独立生效。
+- 发布前执行 `pnpm build`、`pnpm test:run`、`pnpm typecheck`、`pnpm lint`。
+- 构建后以及 npm 发布后，分别运行 Issue #20 链接的原始
+  `repro/generated-barrel-fanout`（`chore/impact-generated-barrel-repro` 分支）。使用其
+  当前源码和 diff，不配置排除，应只命中 page-a；将 page-b 改成动态 namespace 访问后，
+  应恢复 2/2 并给出 `precision: 'file'` 与 `fallbackReason`。
+- 验证 `excludeChangedFiles` 仍产生“未分析”诊断，不能充当符号精度证明。
+
 ## 分层策略
 
 | 层级 | 位置 | 覆盖内容 |
@@ -63,7 +77,7 @@ src/
 - 无任何目标可达的文件变更：影响目标为空，没有错误。
 - 建立两个 workspace package：变更 provider package 文件时，provider 与 consumer package 均被报告。
 - 多条路径、重复边和循环依赖：结果不重复、不会无限循环，最短链正确。
-- 入口经共享聚合文件可达变更文件、但 `EntryTarget.symbol` 实际未使用对应导出时，仍保守报告文件级影响，明确第一版的符号过滤边界。
+- `EntryTarget.symbol` 不限制入口中的其他声明；对支持的声明变更精化 barrel 传播，不确定时保留文件级结果。
 
 ### 3. 模块类型与解析能力
 
@@ -100,7 +114,7 @@ src/
 
 自动化用例：`packages/core/src/impact/__tests__/exclude-changed-files.test.ts`。
 
-- 两个页面经 namespace/barrel 分别消费 `fetchA`、`fetchB`；默认修改 A 时仍保守报告两个页面。
+- 两个页面经 namespace/barrel 分别消费 `fetchA`、`fetchB`；旧排除用例使用无法校验的占位 hunk，仍保守报告两个页面；真实匹配的 hunk 由 Issue #20 用例验证仅影响 A。
 - 配置 `src/generated/**` 后，修改 A 不触发目标，但诊断明确记录 A 未分析，目标总数不变。
 - 混合修改生成文件与手写依赖：只排除前者，后者仍沿生成模块传播；直接 `analyze()` 的图不变。
 - 覆盖 API 传入、根配置读取、API 替换列表及 `[]` 取消过滤。

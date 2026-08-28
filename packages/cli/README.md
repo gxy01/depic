@@ -59,6 +59,21 @@ The same config can hold `include`, `exclude`, `tsconfigPath`, `extensions`,
 `symbolLevel`, `workspace`, and impact options. Explicit API or CLI options take
 precedence; `--targets` remains available as a temporary or legacy override.
 
+### Symbol-aware impact (0.1.8+)
+
+For supported code, impact automatically traces changed declarations through
+named/aliased reexports, star barrels and static namespace members. Changing
+`fetchA` need not affect a page that only calls `generatedClient.fetchB()`.
+The diff must match the post-change source. Unknown provenance, dynamic/escaped
+namespaces, effects, structural edits and unsupported syntax retain file-level
+impact. `EntryTarget.symbol` is still a label, not a per-function target filter.
+
+The summary prints refined/file-level counts per target/change pair and fallback
+reasons. JSON `symbolEvidence` includes affected and pruned decisions, with
+`precision`, `affected`, `changedSymbols`, a symbol `chain` or `fallbackReason`.
+Existing `dependencyChains` stay file-level. This refinement does not require
+exclusions and does not change graph query semantics.
+
 ### Ignore generated changes only
 
 Merge this optional setting into the existing config; keep your `impact.targets`:
@@ -100,7 +115,7 @@ the entire `.depic/` runtime artifact directory stays ignored. Review and commit
 the root `depic.config.json` when it should be shared with the team.
 
 For an ephemeral job that cannot modify the manifest, invoke a pinned version with
-`pnpm dlx @depic/cli@0.1.7 impact ...`.
+`pnpm dlx @depic/cli@0.1.8 impact ...`.
 
 ## License
 

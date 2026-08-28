@@ -281,6 +281,11 @@ const dependents = graph.getDependents('/project/src/utils/format.ts');
 
 ### 场景 C：符号溯源
 
+自 `0.1.8` 起，`analyzeImpact()` 在文件级图上对匹配源码的 diff 进行保守符号精化，
+支持具名/星号 re-export 与静态 namespace 成员，输出 `symbolEvidence`（包括回退原因）。
+不支持的语法或不确定来源保持文件级结果；`getTransitiveDependencies()` 等图 API 不变。
+具体边界和验收见 [影响分析功能清单](docs/IMPACT-ANALYSIS-FEATURES.md)。
+
 ```typescript
 // 文件里用的 formatDate 到底是从哪来的？
 // 特别是经过多层 re-export 时
