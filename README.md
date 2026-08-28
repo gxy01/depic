@@ -64,6 +64,10 @@ reexports and static namespace members, reducing unrelated barrel consumers.
 Uncertain cases retain file-level impact; `symbolEvidence` explains both refined
 decisions and fallback reasons. This does not change file-level graph queries.
 
+From `0.1.9`, checked comment/format-only files can be recorded as `semantic-noop`;
+`includeTypeOnly: true` also refines supported interface/type-alias changes by
+declaration. These additions require `0.1.9` or later.
+
 For explicitly ignored generated-file changes, `impact.excludeChangedFiles` filters
 the input diff without removing modules from the dependency graph. Exclusions are
 reported as **not analyzed**, not unaffected. See the CLI guide below (this option

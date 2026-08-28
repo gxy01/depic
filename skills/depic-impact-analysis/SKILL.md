@@ -194,6 +194,19 @@ without this evidence remain file-level; do not claim the refinement ran.
 Existing `dependencyChains` are file paths; symbol provenance is in
 `symbolEvidence.chain`. Use semantic review to assess actual behavior changes.
 
+For type-contract impact, propose `impact.includeTypeOnly: true` in the existing
+config when that scope is requested. In CLI `0.1.9+`, interfaces/type aliases
+can be tracked by declaration: `UserConfig` evidence does not distinguish its
+fields, so consumers of different fields may both be impacted. Explain complex
+types, merging/name collisions and side effects using the reported fallback.
+
+If the report contains a `semantic-noop` diagnostic, explain that those files were
+checked for whole-file runtime/type AST equivalence with protected directives,
+not skipped by configuration. Do not infer this from a comment-looking diff or
+from zero impacts alone; literals, type contracts and tool directives can matter.
+Type-declaration refinement and semantic-noop detection require CLI `0.1.9+`;
+with older versions, retain the older conservative behavior.
+
 ## Optional generated-change filtering
 
 When generated barrels cause broad fan-out, offer semantic review or an explicit

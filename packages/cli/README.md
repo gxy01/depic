@@ -74,6 +74,19 @@ reasons. JSON `symbolEvidence` includes affected and pruned decisions, with
 Existing `dependencyChains` stay file-level. This refinement does not require
 exclusions and does not change graph query semantics.
 
+### Type contracts and semantic no-ops (0.1.9+)
+
+Set `impact.includeTypeOnly: true` in the existing `depic.config.json` to enable
+supported interface/type-alias propagation. `changedSymbols` names declarations,
+not fields: two consumers of `UserConfig` still both count. Unsupported types,
+merging, effects and ambiguous paths keep explicit file-level fallback.
+
+Verified comment/format-only files print `Semantic no-op files (checked AST
+equivalence): ...` and a `semantic-noop` diagnostic. They were checked, unlike
+`Excluded changed files (not analyzed)`. Runtime/type changes and changed directive
+comments must not disappear. This is whole-file AST comparison, not general
+semantic equivalence or mixed-hunk filtering. Both features require `0.1.9` or later.
+
 ### Ignore generated changes only
 
 Merge this optional setting into the existing config; keep your `impact.targets`:
@@ -115,7 +128,7 @@ the entire `.depic/` runtime artifact directory stays ignored. Review and commit
 the root `depic.config.json` when it should be shared with the team.
 
 For an ephemeral job that cannot modify the manifest, invoke a pinned version with
-`pnpm dlx @depic/cli@0.1.8 impact ...`.
+`pnpm dlx @depic/cli@0.1.9 impact ...`.
 
 ## License
 

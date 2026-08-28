@@ -1,9 +1,10 @@
 import { parseSymbolModule, type SymbolModule } from '../parser/symbols.js';
+import { compareSourceStructure } from '../parser/semantic.js';
 
 export class SymbolFallback extends Error {}
 
 /** Reverse a checked unified patch. Never infer changed symbols from hunk headers alone. */
-export function changedSymbols(source: string, patch: string, file: string, current: SymbolModule): string[] {
+export function changedSymbols(source: string, patch: string, file: string, current: SymbolModule, includeTypeOnly = false): string[] {
   const lines = source.split('\n');
   if (lines.at(-1) === '') lines.pop();
   const old: string[] = [];
@@ -52,11 +53,22 @@ export function changedSymbols(source: string, patch: string, file: string, curr
   }
   if (hunks === 0 || oldChanged.length + newChanged.length === 0) throw new SymbolFallback('missing-diff-hunks');
   old.push(...lines.slice(cursor));
-  const previous = parseSymbolModule(old.join('\n'), file);
+  const previousSource = old.join('\n');
+  try {
+    const comparison = compareSourceStructure(previousSource, source, file);
+    if (comparison.protectedCommentsChanged) throw new SymbolFallback('directive-comment-changed');
+    // An empty set is a checked AST no-op, not a missing/unmapped declaration.
+    if (comparison.equivalent) return [];
+  } catch (error) {
+    if (error instanceof SymbolFallback) throw error;
+    throw new SymbolFallback('semantic-parse-failed');
+  }
+  const previous = parseSymbolModule(previousSource, file, includeTypeOnly);
   if (previous.fallbackReason) throw new SymbolFallback(previous.fallbackReason);
   if (current.fallbackReason) throw new SymbolFallback(current.fallbackReason);
   const shape = (m: SymbolModule) => JSON.stringify({
-    imports: [...m.imports], exports: [...m.exports], stars: m.stars, declarations: [...m.declarations.keys()].sort(),
+    imports: [...m.imports], exports: [...m.exports], stars: m.stars, typeStars: m.typeStars,
+    declarations: [...m.declarations.values()].map((decl) => [decl.name, decl.kind]).sort(),
   });
   if (shape(previous) !== shape(current)) throw new SymbolFallback('module-shape-changed');
   const changed = new Set<string>();

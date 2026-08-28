@@ -204,4 +204,31 @@ index 1111111..2222222 100644
     expect(await runImpact(tmpDir, diff, undefined, report)).toContain('File-level reasons: dynamic-member');
     expect(JSON.parse(readFileSync(report, 'utf8')).symbolEvidence[0]).toMatchObject({ precision: 'file', affected: true });
   });
+
+  it('impact reports semantic no-ops separately from excluded files', async () => {
+    writeFileSync(join(tmpDir, 'a.ts'), '// updated docs\nexport const page = () => 1;\n');
+    writeFileSync(join(tmpDir, 'depic.config.json'), JSON.stringify({ impact: { targets: [{ kind: 'entry', id: 'page', file: 'a.ts' }] } }));
+    const diff = join(tmpDir, 'change.diff');
+    const report = join(tmpDir, 'impact.json');
+    writeFileSync(diff, 'diff --git a/a.ts b/a.ts\n--- a/a.ts\n+++ b/a.ts\n@@ -1 +1 @@\n-// old docs\n+// updated docs\n');
+    const output = await runImpact(tmpDir, diff, undefined, report);
+    expect(output).toContain('Impacted targets: 0 / 1');
+    expect(output).toContain('Semantic no-op files (checked AST equivalence): a.ts');
+    expect(output).not.toContain('not analyzed');
+    expect(JSON.parse(readFileSync(report, 'utf8'))).toMatchObject({ changedFiles: [], diagnostics: [{ code: 'semantic-noop', files: ['a.ts'] }] });
+  });
+
+  it('impact reads type-symbol refinement from shared config', async () => {
+    writeFileSync(join(tmpDir, 'models.ts'), 'export interface User { enabled?: boolean }\nexport interface Other { name: string }\n');
+    writeFileSync(join(tmpDir, 'a.ts'), 'import type { User } from "./models"; export const page = (x: User) => x;');
+    writeFileSync(join(tmpDir, 'b.ts'), 'import type { Other } from "./models"; export const page = (x: Other) => x;');
+    writeFileSync(join(tmpDir, 'depic.config.json'), JSON.stringify({ impact: {
+      includeTypeOnly: true, targets: ['a', 'b'].map((id) => ({ kind: 'entry', id, file: `${id}.ts` })),
+    } }));
+    const diff = join(tmpDir, 'change.diff');
+    const report = join(tmpDir, 'impact.json');
+    writeFileSync(diff, 'diff --git a/models.ts b/models.ts\n--- a/models.ts\n+++ b/models.ts\n@@ -1 +1 @@\n-export interface User {}\n+export interface User { enabled?: boolean }\n');
+    expect(await runImpact(tmpDir, diff, undefined, report)).toContain('Impacted targets: 1 / 2');
+    expect(JSON.parse(readFileSync(report, 'utf8')).symbolEvidence[0]).toMatchObject({ precision: 'symbol', changedSymbols: ['User'] });
+  });
 });

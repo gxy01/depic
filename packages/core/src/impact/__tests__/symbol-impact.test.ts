@@ -105,7 +105,7 @@ describe('symbol-aware impact (issue #20)', () => {
     const diff = change();
     const report = await analyzeImpact({ root, targets: [...targets, { kind: 'entry', id: 'self', file: 'a.ts' }], diff });
     expect(report.impacts.map((item) => item.target.id)).toEqual(['a', 'self']);
-    expect((await analyzeImpact({ root, targets, diff, includeTypeOnly: true })).impactedTargetCount).toBe(2);
+    expect((await analyzeImpact({ root, targets, diff, includeTypeOnly: true })).impactedTargetCount).toBe(1);
     const excluded = await analyzeImpact({ root, targets, diff, excludeChangedFiles: ['a.ts'] });
     expect(excluded.impactedTargetCount).toBe(0);
     expect(excluded.symbolEvidence).toEqual([]);

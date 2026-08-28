@@ -19,10 +19,10 @@
 
 | 编号 | 验收条件 |
 | --- | --- |
-| B-01 | entry 文件自身出现在新增/修改 diff 中时，该 entry 被标为 `direct`。 |
+| B-01 | entry 文件自身出现在新增/修改 diff 中时，该 entry 被标为 `direct`；经检查的整文件 `semantic-noop` 除外。 |
 | B-02 | entry 直接导入的文件变更时，该 entry 被标为 `direct`，并给出依赖链；中间仅经过纯 re-export barrel 时仍为 `direct`。 |
 | B-03 | entry 通过一个或多个非 re-export 中间模块依赖变更文件时，标为 `transitive`，并给出完整链。 |
-| B-04 | 变更 package 内文件时，该 package 被标为 `direct`。 |
+| B-04 | 变更 package 内文件时，该 package 被标为 `direct`；经检查的整文件 `semantic-noop` 除外。 |
 | B-05 | workspace consumer package 依赖发生变更的 provider package 时，consumer package 被报告。 |
 | B-06 | 同一变更文件影响多个目标时，所有目标均出现一次，不重复。 |
 | B-07 | 多个变更文件影响同一目标时，该目标只出现一次，`changedFiles` 汇总所有相关文件。 |
@@ -33,6 +33,8 @@
 | B-11 | Issue #20 的 generatedClient fixture：只改 fetchA 实现时仅命中 page-a，不命中只使用 fetchB 的 page-b；不需要配置排除。 |
 | B-12 | 支持别名 re-export、星号 re-export、namespace 静态访问和私有 helper；旧/新 diff 校验或模块结构检查失败时不剔除目标。 |
 | B-13 | 动态/整体传递 namespace、副作用、歧义/循环导出及不支持语法保留文件级影响并记录回退原因。 |
+| B-14 | 开启 `includeTypeOnly` 后，interface/type-alias 变更只向相关类型的消费者传播；同类型不同字段的消费者仍同时命中。不支持类型/合并/重名及运行时副作用保守回退。 |
+| B-15 | type-only/运行时导入或 re-export 切换不被同名符号掩盖；默认不分析纯 type-only 边。 |
 
 ## 全局影响和诊断
 
@@ -44,6 +46,8 @@
 | C-04 | 删除或重命名 diff 产生说明需要基线依赖图的诊断；第一版不得宣称给出了精确影响页。 |
 | C-05 | 无法构图的普通文件、二进制文件和锁文件会被诊断记录，但不会凭空影响某个目标。 |
 | C-06 | 排除先于全局判断和文件状态诊断，报告的 `excluded-changed-files` warning 包含排序、去重的完整路径；全局返回或零影响结果也不得丢失该诊断。 |
+| C-07 | 经校验的整文件普通注释/格式变更可不传播，但必须输出 `semantic-noop` 诊断；配置排除与已检查的无效变更可明确区分。 |
+| C-08 | 字面量/类型/导入导出/指令变化不能误判 no-op；指令移动、过期 diff、解析不确定、新增文件和全局配置保持保守语义。 |
 
 ## 输出和规模控制
 

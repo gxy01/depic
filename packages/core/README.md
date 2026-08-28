@@ -92,10 +92,32 @@ This is a bounded, conservative subset, not general JS data-flow analysis.
 Dynamic/escaped namespaces, ambiguous/cyclic exports, effects, unsupported syntax
 (including classes and complex initializers), stale/missing hunks, structural
 edits and budget exhaustion fall back. Own-file/package changes stay direct;
-type-contract analysis stays file-level. `EntryTarget.symbol` remains a label:
+type-contract analysis in `0.1.8` stays file-level. `EntryTarget.symbol` remains a label:
 all declarations in an entry are roots. `dependencyChains` and graph APIs remain
 file-level; use `symbolEvidence.chain` for symbol provenance. No new config is
 required, and `excludeChangedFiles` remains an independent explicit opt-out.
+
+#### Type contracts and checked no-ops (0.1.9+)
+
+With `includeTypeOnly: true`, supported interfaces/type aliases, annotations and
+type imports/reexports participate in declaration-level refinement. A change to
+`UserConfig` can spare consumers of another type in the same file, but all users
+of `UserConfig` still count: this is not field-level analysis. Indexed, conditional,
+mapped/import types, merging/name collisions, effects and ambiguous provenance
+retain file-level fallback. Type/runtime edge changes are preserved. The default
+`includeTypeOnly: false` is unchanged.
+
+For modified, non-global files, checked old/new runtime **and type** AST equality
+can omit an entire comment/format-only file, including an own-entry/package file.
+`diagnostics` records `semantic-noop` with its paths; these paths are absent from
+`changedFiles`, but graph nodes remain. This differs from configured exclusions:
+the file was checked, not skipped. Literal spelling and directive/unknown-markup
+comments are protected. Changed/moved directives, parse uncertainty, stale hunks,
+mixed meaningful edits and unsupported cases remain conservative. Global config
+rules still win. AST equivalence is not a universal proof about source-reading
+tools or runtime reflection; no per-hunk semantic filtering is performed.
+
+These additions require `0.1.9` or later.
 
 `analyze()` and `analyzeImpact()` both load `depic.config.json`. The file accepts
 `include`, `exclude`, `tsconfigPath`, `extensions`, `symbolLevel`, `workspace`,

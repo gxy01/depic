@@ -196,7 +196,7 @@ depic impact \
   re-export、`export *`、`export * as ns`、namespace 静态成员（含 `ns['member']`）追踪。
 - 只有完整追踪证明不相交时才剔除目标。动态成员、namespace 整体传递、歧义/循环导出、
   顶层副作用/副作用导入、class/复杂初始化等不支持语法、结构变化、diff 失配和预算耗尽
-  均保留文件级结果。类型契约分析不精化；目标自身/所属 package 文件变更仍直接命中。
+  均保留文件级结果。`0.1.8` 类型契约分析不精化；目标自身/所属 package 文件变更仍直接命中。
 - 不把 `EntryTarget.symbol` 当作过滤条件：入口文件内全部声明作为起点。
 - `symbolEvidence` 按目标和变更文件输出（包括被剔除候选）：`targetId`、`changedFile`、
   `precision: 'symbol' | 'file'`、`affected`、可选 `changedSymbols`、符号 `chain` 或
@@ -204,6 +204,23 @@ depic impact \
 - 既有 `dependencyChains` 和图 API 保持文件级语义；符号来源看 `symbolEvidence.chain`。
   CLI 摘要显示精化/文件级判断数量与回退原因。证据不是行为正确性证明。
 - 精化先于链数限制；`excludeChangedFiles` 独立且更早执行，不作为精化手段。
+
+## 类型契约与无效变更精化（0.1.9 / Issue #22、#23）
+
+- 复用 `includeTypeOnly`，不新增配置。开启后记录 interface/type-alias 的位置与引用，
+  追踪类型注解、具名/别名/星号 type re-export、namespace 类型成员和本地类型别名。
+  `changedSymbols` 精确到声明，不到字段；同一类型的所有消费者仍保守命中。
+- 索引访问、条件/映射/import type、声明合并、类型/值重名、模块结构变化、副作用、导出歧义
+  保留明确回退。type-only 与运行时边的切换纳入结构检查；默认运行时分析不变。
+- 非全局修改文件经完整 hunk 校验后，对比旧/新完整 AST（保留运行时、类型、字面量原始内容），
+  仅移除位置/解析器上下文；普通注释/格式变化在整个文件等价时不传播。
+- 工具指令及未知标记注释保留原文、代码锚点和相邻空白；变化或移动触发保守回退。
+  字符串、正则、模板内容和 JSX 文本中的注释样式字符不视为注释。
+- `semantic-noop` 诊断列出经校验而移除的文件，与 `excluded-changed-files` 的未分析文件区分。
+  前者不进入 `changedFiles`/`impacts`，不删除图节点；目标自身/所属包的此类变更也不直接命中。
+- 排除规则仍最先执行，全局配置规则不被 no-op 检查覆盖；新增/删除/重命名、失配/缺失 hunk、
+  解析不确定或混合有效变更保留现有保守路径。不做逐 hunk 语义过滤或通用源码反射分析。
+- 以上能力需要 `0.1.9` 或更高版本，`0.1.8` 不支持。
 
 ## 非目标
 

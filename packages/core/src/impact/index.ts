@@ -83,6 +83,14 @@ export async function analyzeImpact(options: ImpactOptions): Promise<ImpactRepor
     symbolLevel: true,
   });
   const targets = validateTargets(normalizedTargets, graph, root, diagnostics);
+  const includeTypeOnly = options.includeTypeOnly ?? impactConfig?.includeTypeOnly ?? false;
+  const symbolAnalyzer = new SymbolImpactAnalyzer(root, graph.edges()
+    .filter((edge) => graph.getFileNode(edge.target))
+    .filter((edge) => includeTypeOnly || !isTypeOnlyEdge(edge, graph)), includeTypeOnly);
+  const patches = new Map<string, string | undefined>();
+  for (const file of diffFiles) {
+    patches.set(file.path, patches.has(file.path) || file.status !== 'modified' ? undefined : file.patch);
+  }
 
   const currentDiffFiles = diffFiles
     .filter((file) => file.status === 'added' || file.status === 'modified')
@@ -96,6 +104,7 @@ export async function analyzeImpact(options: ImpactOptions): Promise<ImpactRepor
     .sort();
 
   const changedFiles: string[] = [];
+  const semanticNoops = new Set<string>();
   for (const file of diffFiles) {
     if (file.status === 'deleted' || file.status === 'renamed') {
       diagnostics.push({
@@ -112,6 +121,10 @@ export async function analyzeImpact(options: ImpactOptions): Promise<ImpactRepor
     }
     const absolutePath = toAbsolutePath(root, file.path);
     if (graph.getFileNode(absolutePath)) {
+      if (symbolAnalyzer.isSemanticNoop(absolutePath, patches.get(file.path))) {
+        semanticNoops.add(file.path);
+        continue;
+      }
       changedFiles.push(file.path);
     } else {
       diagnostics.push({
@@ -121,6 +134,13 @@ export async function analyzeImpact(options: ImpactOptions): Promise<ImpactRepor
         files: [file.path],
       });
     }
+  }
+
+  if (semanticNoops.size) {
+    diagnostics.push({
+      level: 'warning', code: 'semantic-noop', files: [...semanticNoops].sort(),
+      message: 'Checked comment/format-only changes have identical runtime/type ASTs and preserved directive comments; omitted from impact propagation, not excluded by configuration.',
+    });
   }
 
   const stableChangedFiles = [...new Set(changedFiles)].sort();
@@ -157,18 +177,12 @@ export async function analyzeImpact(options: ImpactOptions): Promise<ImpactRepor
   let reportTruncated = false;
   const impacts: TargetImpact[] = [];
   const symbolEvidence: ImpactSymbolEvidence[] = [];
-  const includeTypeOnly = options.includeTypeOnly ?? impactConfig?.includeTypeOnly ?? false;
-  const symbolAnalyzer = new SymbolImpactAnalyzer(root, graph.edges()
-    .filter((edge) => graph.getFileNode(edge.target))
-    .filter((edge) => includeTypeOnly || !isTypeOnlyEdge(edge, graph)));
 
   for (const target of targets) {
     const targetChanges = new Set(changedAbsoluteFiles);
     for (const file of stableChangedFiles) {
       const absolute = toAbsolutePath(root, file);
-      const patches = diffFiles.filter((item) => item.path === file);
-      const patch = patches.length === 1 && patches[0].status === 'modified' ? patches[0].patch : undefined;
-      const evidence = symbolAnalyzer.evaluate(target.target.id, target.entryFiles, absolute, patch, includeTypeOnly);
+      const evidence = symbolAnalyzer.evaluate(target.target.id, target.entryFiles, absolute, patches.get(file));
       if (evidence) {
         symbolEvidence.push(evidence);
         if (!evidence.affected) targetChanges.delete(absolute);
