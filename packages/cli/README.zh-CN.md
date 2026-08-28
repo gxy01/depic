@@ -79,6 +79,10 @@ interface/type-alias 传播。`changedSymbols` 标识声明，不是字段；两
 指令注释变化不能被忽略。这是整个文件的 AST 对比，不是通用语义等价或混合 hunk 过滤。
 这两项新增能力需要 `0.1.9` 或更高版本。
 
+未改变的顶层指令包装及纯文本标签 HTTP(S) Markdown 文档链接场景请使用 `0.1.10+`：
+前面的声明增长或文档 URL 变化不再单独阻断受支持的精化；指令改动和归属不确定仍回退。
+无需新增配置。
+
 ### 只忽略生成文件的变更
 
 把下面的可选设置合并到已有配置，保留原来的 `impact.targets`：
@@ -116,7 +120,7 @@ pnpm exec depic impact . \
 运行产物目录保持忽略。需要团队共享时，请审查并提交根目录的
 `depic.config.json`。
 
-无法修改依赖清单的临时任务可使用 `pnpm dlx @depic/cli@0.1.9 impact ...`，并显式固定版本。
+无法修改依赖清单的临时任务可使用 `pnpm dlx @depic/cli@0.1.10 impact ...`，并显式固定版本。
 
 ## License
 

@@ -68,6 +68,11 @@ From `0.1.9`, checked comment/format-only files can be recorded as `semantic-noo
 `includeTypeOnly: true` also refines supported interface/type-alias changes by
 declaration. These additions require `0.1.9` or later.
 
+From `0.1.10`, unchanged top-level directive wrappers no longer block supported
+refinement when earlier declarations grow; plain-label HTTP(S) Markdown links
+can participate in checked documentation-only no-ops. Changed directives and
+uncertain cases remain conservative.
+
 For explicitly ignored generated-file changes, `impact.excludeChangedFiles` filters
 the input diff without removing modules from the dependency graph. Exclusions are
 reported as **not analyzed**, not unaffected. See the CLI guide below (this option

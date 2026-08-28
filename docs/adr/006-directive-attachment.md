@@ -1,6 +1,6 @@
 # ADR 006: Stable directive attachment and bounded documentation links
 
-Status: accepted for the unreleased Issue #25 fix; extends ADR 005.
+Status: accepted for release 0.1.10, fixing Issue #25; extends ADR 005.
 
 ## Context
 
@@ -37,4 +37,4 @@ documentation-link churn can yield checked whole-file AST no-ops. Nested
 directives, line-sensitive placement changes and ambiguous identities can still
 conservatively fall back. No config or report schema changes, no type-field
 precision, and no universal claim about source-reading tools are introduced.
-These fixes are not present in published 0.1.9.
+These fixes require 0.1.10 or later; they are not present in 0.1.9.
