@@ -42,6 +42,37 @@ describe('type declarations and semantic no-ops (issues #22/#23)', () => {
     expect(report.symbolEvidence?.every((item) => item.precision === 'symbol')).toBe(true);
   });
 
+  it('refines type edits inside unchanged directive wrappers (issue #25)', async () => {
+    put('models.ts', '/* eslint-disable */\n// @ts-nocheck\nexport interface UserConfig {\n  name?: string;\n  enabled?: boolean;\n}\nexport interface Other { name: string }\n/* eslint-enable */\n');
+    const diff = 'diff --git a/models.ts b/models.ts\n--- a/models.ts\n+++ b/models.ts\n@@ -4,2 +4,3 @@\n   name?: string;\n+  enabled?: boolean;\n }\n';
+    const report = await analyzeImpact({ root, targets, diff, includeTypeOnly: true });
+    expect(report.impacts.map((item) => item.target.id)).toEqual(['a']);
+    expect(report.symbolEvidence).toEqual([
+      expect.objectContaining({ precision: 'symbol', affected: true, changedSymbols: ['UserConfig'] }),
+      expect.objectContaining({ precision: 'symbol', affected: false }),
+    ]);
+  });
+
+  it('reports documentation-link churn inside wrappers as a checked no-op (issue #25)', async () => {
+    const before = '/* eslint-disable */\n// @ts-nocheck\n/**\n * [API docs](https://example.com/docs?version=1)\n */\nexport function f() { return "/user"; }\n/* eslint-enable */';
+    put('a.ts', 'import { f } from "./models"; export const page = () => f();');
+    const report = await analyzeImpact({ root, targets: [targets[0], { kind: 'entry', id: 'self', file: 'models.ts' }], diff: change(before, before.replace('version=1', 'version=2')) });
+    expect(report.impactedTargetCount).toBe(0);
+    expect(report.changedFiles).toEqual([]);
+    expect(JSON.parse(JSON.stringify(report)).diagnostics).toContainEqual(expect.objectContaining({ code: 'semantic-noop', files: ['models.ts'] }));
+  });
+
+  it('retains file fallback when a wrapper directive moves across a declaration', async () => {
+    const a = 'export interface UserConfig { name?: string }';
+    const b = 'export interface Other { name: string }';
+    const before = `/* eslint-disable */\n${a}\n/* eslint-enable */\n${b}`;
+    const after = `/* eslint-disable */\n${a}\n${b}\n/* eslint-enable */`;
+    const report = await analyzeImpact({ root, targets, diff: change(before, after), includeTypeOnly: true });
+    expect(report.impactedTargetCount).toBe(2);
+    expect(report.symbolEvidence?.every((item) => item.fallbackReason === 'directive-comment-changed')).toBe(true);
+    expect(report.diagnostics.some((item) => item.code === 'semantic-noop')).toBe(false);
+  });
+
   it('preserves default exclusion of type-only edges', async () => {
     expect((await analyzeImpact({ root, targets, diff: typeDiff() })).impactedTargetCount).toBe(0);
   });

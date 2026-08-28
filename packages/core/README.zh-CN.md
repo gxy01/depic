@@ -96,6 +96,12 @@ report.impacts; // [{ target, impact, dependencyChains, ... }]
 混合有效变更等继续保守处理，全局配置规则仍优先。AST 等价不是对所有源码读取工具或
 运行时反射的行为证明；暂不逐 hunk 消除语义噪声。这两项能力需要 `0.1.9` 或更高版本。
 
+尚未发布的后续修复（Issue #25）：未改变的顶层指令包装按声明边界归属，而不是绝对代码
+偏移比较，类型增长本身不再阻断精化。指令原文/顺序、相邻声明和相邻空白仍受保护；
+下一行指令/未知标记还保留物理行位置，嵌套或不确定归属仍严格回退。纯文本标签的 HTTP(S)
+Markdown 文档链接可以变化而不阻断经校验的 no-op，未知标记和包含指令的注释仍受保护。
+diff 还原保留未改变的文件末尾换行。这些修复不在 `0.1.9` 中。
+
 `analyze()` 和 `analyzeImpact()` 都会读取 `depic.config.json`。该文件可配置
 `include`、`exclude`、`tsconfigPath`、`extensions`、`symbolLevel`、
 `workspace` 与 `impact`；显式 API 参数优先。

@@ -53,7 +53,10 @@ export function changedSymbols(source: string, patch: string, file: string, curr
   }
   if (hunks === 0 || oldChanged.length + newChanged.length === 0) throw new SymbolFallback('missing-diff-hunks');
   old.push(...lines.slice(cursor));
-  const previousSource = old.join('\n');
+  // Preserve the unchanged EOF newline too: dropping it moves a trailing
+  // directive's whitespace attachment. EOF newline edits carry diff markers,
+  // which are rejected above rather than guessed.
+  const previousSource = old.join('\n') + (source.endsWith('\n') ? '\n' : '');
   try {
     const comparison = compareSourceStructure(previousSource, source, file);
     if (comparison.protectedCommentsChanged) throw new SymbolFallback('directive-comment-changed');

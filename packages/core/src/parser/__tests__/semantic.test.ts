@@ -47,4 +47,65 @@ describe('checked source structure equivalence', () => {
     const suffix = '\n/** @param {string} name */\nexport const f = (name) => name;';
     expect(compareSourceStructure('// old' + suffix, '// updated docs' + suffix, 'test.js').equivalent).toBe(true);
   });
+
+  it('keeps unchanged generated-file wrappers attached after a type grows', () => {
+    const before = '/* eslint-disable */\n// @ts-nocheck\nexport interface UserConfig { name?: string }\nexport interface OtherConfig { label?: string }\n/* eslint-enable */';
+    const after = before.replace('name?: string', 'name?: string; enabled?: boolean');
+    expect(compareSourceStructure(before, after, 'test.ts')).toEqual({ equivalent: false, protectedCommentsChanged: false });
+  });
+
+  it('anchors a directive between declarations independently of preceding code length', () => {
+    const before = 'export interface A { name: string }\n/* eslint-disable */\nexport interface B { x: string }\n/* eslint-enable */';
+    expect(compareSourceStructure(before, before.replace('name: string', 'name: string; age: number'), 'test.ts').protectedCommentsChanged).toBe(false);
+  });
+
+  it('keeps UTF-8 spans correct when a preceding declaration grows', () => {
+    const before = 'export const text = "中文😀";\n/* eslint-disable */\nexport interface A { x: string }\n/* eslint-enable */';
+    expect(compareSourceStructure(before, before.replace('中文😀', '更多中文😀😀'), 'test.ts').protectedCommentsChanged).toBe(false);
+  });
+
+  it('keeps nested expression directives on the strict fallback path', () => {
+    const before = 'export function f() { const a = 1; /* @__PURE__ */ return g(); }';
+    expect(compareSourceStructure(before, before.replace('a = 1', 'a = 123'), 'test.ts').protectedCommentsChanged).toBe(true);
+  });
+
+  it.each([
+    '[API docs](https://example.com/docs?version=1)',
+    '[中文文档](https://example.com/docs?version=1&lang=zh#api)',
+    'Read [API docs](http://example.com/v1) for details.',
+  ])('recognizes a bounded documentation link: %s', (text) => {
+    const before = `/**\n * ${text}\n */\nexport function f() { return 1; }`;
+    expect(compareSourceStructure(before, before.replace('1', '2'), 'test.ts')).toEqual({ equivalent: true, protectedCommentsChanged: false });
+  });
+
+  it.each([
+    ['/* eslint-disable */\nconst a = 1;\n/* eslint-enable */\nconst b = 2;', '/* eslint-disable */\nconst a = 1;\nconst b = 2;\n/* eslint-enable */'],
+    ['/* eslint-disable */\nconst a = 1;\nconst b = 2;', 'const a = 1;\n/* eslint-disable */\nconst b = 2;'],
+    ['// @ts-ignore\nconst a = 1;\nconst b = 2;', 'const a = 1;\n// @ts-ignore\nconst b = 2;'],
+    ['// @ts-ignore\n// docs\nconst a = 1;', '// docs\n// @ts-ignore\nconst a = 1;'],
+    ['/* eslint-disable */\n// @ts-nocheck\nconst a = 1;', '// @ts-nocheck\n/* eslint-disable */\nconst a = 1;'],
+    ['const a = 1;', '/* eslint-disable */\nconst a = 1;'],
+    ['/* eslint-disable */\nconst a = 1;', 'const a = 1;'],
+    ['/* eslint-disable */\nconst a = 1;', '/* eslint-enable */\nconst a = 1;'],
+    ['// @ts-ignore\nconst a = 1;\nconst b = 2;', '// @ts-ignore\nconst b = 2;\nconst a = 1;'],
+  ])('protects directive identity, ordering and controlled ranges', (before, after) => {
+    expect(compareSourceStructure(before, after, 'test.ts').protectedCommentsChanged).toBe(true);
+  });
+
+  it.each([
+    '[docs](javascript:custom1)',
+    'custom[old1]',
+    '[docs](https://example.com/1) @custom',
+    '[docs](https://example.com/1) eslint-disable',
+    '[docs](https://example.com/1#@__PURE__)',
+    '[docs](https://example.com/1#__PURE__)',
+    '[docs](https://example.com/1/@__NO_SIDE_EFFECTS__)',
+    '[docs](https://user:pass@example.com/1)',
+    '[docs](https://)',
+    '[docs](https://example.com/1',
+    '<custom value="1">',
+  ])('keeps unrecognized or directive-bearing markup protected: %s', (text) => {
+    const before = `/** ${text} */\nexport const a = 1;`;
+    expect(compareSourceStructure(before, before.replace('docs', 'reference').replace('1', '2'), 'test.ts').protectedCommentsChanged).toBe(true);
+  });
 });
