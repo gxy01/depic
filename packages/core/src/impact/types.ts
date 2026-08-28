@@ -61,4 +61,16 @@ export interface ImpactReport {
   impacts: TargetImpact[];
   diagnostics: ImpactDiagnostic[];
   truncated: boolean;
+  /** Refinement decisions, including targets proven unrelated to a changed symbol. */
+  symbolEvidence?: ImpactSymbolEvidence[];
+}
+
+export interface ImpactSymbolEvidence {
+  targetId: string;
+  changedFile: string;
+  precision: 'symbol' | 'file';
+  affected: boolean;
+  changedSymbols?: string[];
+  chain?: { file: string; symbol: string }[];
+  fallbackReason?: string;
 }

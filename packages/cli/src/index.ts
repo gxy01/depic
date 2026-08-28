@@ -67,6 +67,14 @@ export async function runImpact(
   if (report.diagnostics.length > 0) {
     lines.push(`Diagnostics: ${report.diagnostics.length}`);
   }
+  if (report.symbolEvidence?.length) {
+    const precise = report.symbolEvidence.filter((item) => item.precision === 'symbol');
+    const fallbacks = report.symbolEvidence.filter((item) => item.precision === 'file');
+    lines.push(`Symbol analysis: ${precise.length} refined, ${fallbacks.length} file-level (target/change pairs)`);
+    if (fallbacks.length) {
+      lines.push(`File-level reasons: ${[...new Set(fallbacks.map((item) => item.fallbackReason))].sort().join(', ')}; see symbolEvidence in report`);
+    }
+  }
   lines.push(`Report written to ${reportPath}`);
   return lines.join('\n');
 }

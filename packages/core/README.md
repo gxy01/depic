@@ -80,6 +80,23 @@ the repository
 [`IMPACT-ANALYSIS-FEATURES.md`](../../docs/IMPACT-ANALYSIS-FEATURES.md) for the
 complete contract.
 
+Since `0.1.8`, `analyzeImpact()` automatically refines supported runtime paths by
+checking diff hunks against the current source, mapping edits to declarations,
+and tracing references through named/aliased reexports, `export *`, and static
+namespace members (including string-literal access). Private helpers are traced.
+`report.symbolEvidence` records each candidate target/change pair, including
+pruned targets: `precision`, `affected`, `changedSymbols`, a symbol `chain` when
+affected, or `fallbackReason` for retained file-level results.
+
+This is a bounded, conservative subset, not general JS data-flow analysis.
+Dynamic/escaped namespaces, ambiguous/cyclic exports, effects, unsupported syntax
+(including classes and complex initializers), stale/missing hunks, structural
+edits and budget exhaustion fall back. Own-file/package changes stay direct;
+type-contract analysis stays file-level. `EntryTarget.symbol` remains a label:
+all declarations in an entry are roots. `dependencyChains` and graph APIs remain
+file-level; use `symbolEvidence.chain` for symbol provenance. No new config is
+required, and `excludeChangedFiles` remains an independent explicit opt-out.
+
 `analyze()` and `analyzeImpact()` both load `depic.config.json`. The file accepts
 `include`, `exclude`, `tsconfigPath`, `extensions`, `symbolLevel`, `workspace`,
 and an `impact` object. Explicit API options override configured values.
