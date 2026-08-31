@@ -11,6 +11,7 @@ import {
   runImpact,
   runInit,
 } from '../index';
+import { runCli } from '../cli';
 
 describe('CLI commands', () => {
   let tmpDir: string;
@@ -33,6 +34,62 @@ describe('CLI commands', () => {
     expect(parsed).toHaveProperty('edges');
     expect(parsed.nodes.length).toBe(2);
     expect(parsed.edges.length).toBe(1);
+  });
+
+  it.each(['--version', '-V'])('prints the package version for %s', async (flag) => {
+    let stdout = '';
+    let stderr = '';
+    const packageJson = JSON.parse(readFileSync(new URL('../../package.json', import.meta.url), 'utf8'));
+
+    const exitCode = await runCli(
+      [flag],
+      (value) => { stdout += value; },
+      (value) => { stderr += value; },
+    );
+
+    expect(exitCode).toBe(0);
+    expect(stdout).toBe(`${packageJson.version}\n`);
+    expect(stderr).toBe('');
+  });
+
+  it.each(['--help', '-h'])('prints root help for %s', async (flag) => {
+    let stdout = '';
+
+    const exitCode = await runCli([flag], (value) => { stdout += value; });
+
+    expect(exitCode).toBe(0);
+    expect(stdout).toContain('Usage:');
+    expect(stdout).toContain('depic impact');
+    expect(stdout).toContain('--version');
+  });
+
+  it.each(['init', 'analyze', 'cycles', 'dependents', 'stats', 'impact', 'web', 'serve'])(
+    'prints subcommand help without executing %s',
+    async (command) => {
+      let stdout = '';
+      let stderr = '';
+
+      const exitCode = await runCli(
+        [command, '--help'],
+        (value) => { stdout += value; },
+        (value) => { stderr += value; },
+      );
+
+      expect(exitCode).toBe(0);
+      expect(stdout).toContain(`Usage: depic ${command}`);
+      expect(stderr).toBe('');
+    },
+  );
+
+  it('documents impact chain limits in subcommand help', async () => {
+    let stdout = '';
+
+    const exitCode = await runCli(['impact', '--help'], (value) => { stdout += value; });
+
+    expect(exitCode).toBe(0);
+    expect(stdout).toContain('depic.config.json');
+    expect(stdout).toContain('impact.maxChainsPerTarget');
+    expect(stdout).toContain('impact.maxTotalChains');
   });
 
   it('analyze --dot outputs DOT format', async () => {
