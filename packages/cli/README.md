@@ -31,6 +31,7 @@ summary. Depic itself does not read Git state or invoke an AI model.
 ## Commands
 
 ```bash
+depic --version             Print the installed CLI version
 depic init [root]          Configure Git rules for .depic artifacts
 depic analyze <root>       Analyze project, output JSON (--dot for Graphviz)
 depic cycles <root>        Detect circular dependencies
@@ -41,6 +42,11 @@ depic impact [root] --diff <path> [--targets <path>] --report <path>
 depic web <root> [output]  Generate interactive HTML visualization
 depic serve <root> [port]  Start local web server with live visualization
 ```
+
+Run `depic --help` for the command overview or `depic <command> --help` for
+arguments and options specific to a command. The `impact` help also lists its
+`depic.config.json` settings, including `impact.maxChainsPerTarget` and
+`impact.maxTotalChains`.
 
 By default, impact targets come from the shared root `depic.config.json`:
 
@@ -133,7 +139,7 @@ the entire `.depic/` runtime artifact directory stays ignored. Review and commit
 the root `depic.config.json` when it should be shared with the team.
 
 For an ephemeral job that cannot modify the manifest, invoke a pinned version with
-`pnpm dlx @depic/cli@0.1.10 impact ...`.
+`pnpm dlx @depic/cli@0.1.11 impact ...`.
 
 ## License
 

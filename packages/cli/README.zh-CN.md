@@ -27,6 +27,7 @@ Skill 负责检查仓库和首次目标发现：提出框架相关的 `entry` �
 ## 命令
 
 ```bash
+depic --version             输出已安装的 CLI 版本
 depic init [root]          配置 .depic 运行产物的 Git 忽略规则
 depic analyze <root>       分析项目，输出 JSON（--dot 输出 Graphviz 格式）
 depic cycles <root>        检测循环依赖
@@ -37,6 +38,10 @@ depic impact [root] --diff <path> [--targets <path>] --report <path>
 depic web <root> [output]  生成交互式 HTML 可视化
 depic serve <root> [port]  启动本地 Web 服务器
 ```
+
+运行 `depic --help` 查看命令概览，或运行 `depic <command> --help` 查看某个命令的
+参数和选项。`impact` 帮助还会列出 `depic.config.json` 配置，包括
+`impact.maxChainsPerTarget` 和 `impact.maxTotalChains`。
 
 默认从项目根目录统一的 `depic.config.json` 读取影响目标：
 
@@ -120,7 +125,7 @@ pnpm exec depic impact . \
 运行产物目录保持忽略。需要团队共享时，请审查并提交根目录的
 `depic.config.json`。
 
-无法修改依赖清单的临时任务可使用 `pnpm dlx @depic/cli@0.1.10 impact ...`，并显式固定版本。
+无法修改依赖清单的临时任务可使用 `pnpm dlx @depic/cli@0.1.11 impact ...`，并显式固定版本。
 
 ## License
 
