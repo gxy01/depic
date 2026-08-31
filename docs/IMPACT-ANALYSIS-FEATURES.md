@@ -263,6 +263,17 @@ depic impact \
 - CLI 的 `--max-chains-per-target` / `--max-total-chains` 仅覆盖单次运行，优先于共享配置；
   两者必须是正整数，退出状态仍保持成功。
 
+## 未映射源码与非源码变更分类（0.1.16 / Issue #35）
+
+- configured global-impact patterns 优先；命中的 README 等非源码文件仍产生全局影响。
+- 不在 head 依赖图中的变更路径会采用最终合并后的顶层 `include`、`exclude`、
+  `extensions` 分类，而不是只检查固定扩展名。
+- 被 `include` 命中且未被 `exclude` 排除，或属于默认/配置源码扩展名的路径，继续产生
+  warning 级 `unmapped-file`。这覆盖解析失败、gitignore、配置和潜在 graph gap。
+- 其余预期不入源码图的文档/产物产生 info 级 `non-source-file`。该诊断继续出现在 JSON
+  和 CLI 独立摘要中，不是自动 ignore，也不表示“无影响”。
+- CLI 的最终诊断摘要分别统计 warning 和 info，避免把普通非源码信息显示为 warning。
+
 ## 非目标
 
 - 不在 Depic 内部识别路由、框架组件、页面或任务入口。

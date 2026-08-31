@@ -122,6 +122,11 @@ diff 还原保留未改变的文件末尾换行。这些修复需要 `0.1.10` �
 一条已证明遗漏的链以及可复制的 CLI/config 恢复设置。截断的 `TargetImpact` 还包含
 `knownMinimumPathCount`；报告总预算耗尽后，已证明受影响的后续 target 不再被静默隐藏。
 
+从 `0.1.16` 起（Issue #35），缺失的变更文件会按最终生效的 discovery 配置分类。
+被 `include` 命中且未被 `exclude` 排除，或属于默认/自定义源码 `extensions` 的路径，
+仍产生醒目的 `unmapped-file` warning；其余文档和产物路径产生 info 级
+`non-source-file`。两类都会保留在 JSON 报告中，后者不是隐式忽略，也不证明无影响。
+
 `analyze()` 和 `analyzeImpact()` 都会读取 `depic.config.json`。该文件可配置
 `include`、`exclude`、`tsconfigPath`、`extensions`、`symbolLevel`、
 `workspace` 与 `impact`；显式 API 参数优先。

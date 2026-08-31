@@ -46,7 +46,7 @@ export interface ImpactChainLimitDetails {
 }
 
 export interface ImpactDiagnostic {
-  level: 'warning';
+  level: 'warning' | 'info';
   code:
     | 'empty-targets'
     | 'missing-entry-file'
@@ -54,6 +54,7 @@ export interface ImpactDiagnostic {
     | 'deleted-file'
     | 'renamed-file'
     | 'unmapped-file'
+    | 'non-source-file'
     | 'excluded-changed-files'
     | 'semantic-noop'
     | 'chain-limit-reached';

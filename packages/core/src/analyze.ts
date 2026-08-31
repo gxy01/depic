@@ -9,7 +9,7 @@ import type { FileNode, ImportInfo } from './graph/types.js';
 import type { ParsedFile } from './parser/index.js';
 import { applyDepicConfig } from './config.js';
 
-const DEFAULT_INCLUDE = ['**/*.{ts,tsx,js,jsx}'];
+export const DEFAULT_ANALYZE_INCLUDE = ['**/*.{ts,tsx,js,jsx}'];
 
 /**
  * 分析项目依赖图。入口函数。
@@ -20,7 +20,7 @@ export async function analyze(input: AnalyzeOptions): Promise<DependencyGraph> {
   const graph = new DependencyGraph();
 
   // 预编译 include/exclude glob 模式
-  const includeRegexes = (options.include ?? DEFAULT_INCLUDE).map((p) => globToRegex(p));
+  const includeRegexes = (options.include ?? DEFAULT_ANALYZE_INCLUDE).map((p) => globToRegex(p));
   const excludeRegexes = (options.exclude ?? []).map((p) => globToRegex(p));
 
   // 0. 加载 .gitignore 排除模式
@@ -303,4 +303,9 @@ function globToRegex(pattern: string): RegExp {
     );
   regex = `${regex}$`;
   return new RegExp(regex);
+}
+
+/** Match a file using the same glob semantics as analyze() discovery. */
+export function matchesAnalyzeGlob(file: string, patterns: string[]): boolean {
+  return patterns.some((pattern) => globToRegex(pattern).test(file));
 }
