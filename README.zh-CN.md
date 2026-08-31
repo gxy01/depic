@@ -73,6 +73,10 @@ React 页面、路由、命令、任务或 workspace package 等候选目标；�
 只读取 `client.fetchB` 的消费者可被安全剔除；动态访问、写入、对象逃逸、spread、
 getter/setter 和不确定结构仍保留文件级影响。
 
+从 `0.1.15` 起，每个被截断的 target 都会报告“已返回 / 已知至少”链数、当前限制、
+一条已证明遗漏的链样本和可复制的恢复设置；CLI 可用 `--max-chains-per-target` 与
+`--max-total-chains` 做单次覆盖。
+
 需要主动忽略生成文件的变更时，可使用 `impact.excludeChangedFiles` 只过滤输入 diff，
 保留依赖图中的模块。报告会明确记录“未分析”，不能解释成“无影响”；用法见下方 CLI 文档
 （`0.1.6` 及更早版本不支持该选项）。

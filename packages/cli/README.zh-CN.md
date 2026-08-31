@@ -108,6 +108,16 @@ Oxlint 指令不会再被检查型 no-op 剔除。`oxlint-disable` / `oxlint-ena
 整体对象逃逸、spread、getter/setter 和不确定结构仍按文件级传播，并在
 `symbolEvidence` 中给出 `fallbackReason`。
 
+### 可操作的链路截断（0.1.15+）
+
+达到链路上限时，摘要会逐一指出被截断 target，显示“已返回 / 已知至少”链数和当前限制，
+给出一条已证明遗漏的链，并输出可复制的恢复设置。可用以下参数仅覆盖本次运行：
+
+```bash
+depic impact . --diff change.diff --report report.json \
+  --max-chains-per-target 40 --max-total-chains 20000
+```
+
 ### 只忽略生成文件的变更
 
 把下面的可选设置合并到已有配置，保留原来的 `impact.targets`：
@@ -145,7 +155,7 @@ pnpm exec depic impact . \
 运行产物目录保持忽略。需要团队共享时，请审查并提交根目录的
 `depic.config.json`。
 
-无法修改依赖清单的临时任务可使用 `pnpm dlx @depic/cli@0.1.14 impact ...`，并显式固定版本。
+无法修改依赖清单的临时任务可使用 `pnpm dlx @depic/cli@0.1.15 impact ...`，并显式固定版本。
 
 ## License
 

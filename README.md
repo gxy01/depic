@@ -87,6 +87,11 @@ A change to `client.fetchA` can prune consumers that only read `client.fetchB`.
 Dynamic access, mutation, object escape, spreads, accessors, and uncertain shapes
 retain conservative file-level impact.
 
+From `0.1.15`, every truncated target reports returned/known-minimum chain
+counts, active limits, an omitted-chain sample, and copyable recovery settings.
+One-off CLI overrides are available through `--max-chains-per-target` and
+`--max-total-chains`.
+
 For explicitly ignored generated-file changes, `impact.excludeChangedFiles` filters
 the input diff without removing modules from the dependency graph. Exclusions are
 reported as **not analyzed**, not unaffected. See the CLI guide below (this option

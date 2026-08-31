@@ -330,9 +330,102 @@ describe('analyzeImpact', () => {
       'src/utils/zChanged.ts',
     ]]);
     expect(report.impacts[0].truncated).toBe(true);
+    expect(report.impacts[0].knownMinimumPathCount).toBe(2);
     expect(report.truncated).toBe(true);
     expect(report.diagnostics).toContainEqual(expect.objectContaining({
       code: 'chain-limit-reached',
+      chainLimit: expect.objectContaining({
+        targetId: '/shortest',
+        returnedChainCount: 1,
+        knownMinimumChainCount: 2,
+        maxChainsPerTarget: 1,
+        maxTotalChains: 10_000,
+        limitCause: 'per-target',
+      }),
+    }));
+  });
+
+  it('reports actionable per-target truncation counts, limits, recovery, and an omitted chain (issue #34)', async () => {
+    mkdirSync(join(root, 'src/deps'), { recursive: true });
+    const imports: string[] = [];
+    const diffs: string[] = [];
+    for (let index = 1; index <= 21; index += 1) {
+      const file = `src/deps/d${index}.ts`;
+      imports.push(`import { d${index} } from '../deps/d${index}';`);
+      writeFileSync(join(root, file), `export const d${index} = 'new';`);
+      diffs.push(`diff --git a/${file} b/${file}\n--- a/${file}\n+++ b/${file}\n@@ -1 +1 @@\n-export const d${index} = 'old';\n+export const d${index} = 'new';\n`);
+    }
+    writeFileSync(
+      join(root, 'src/pages/FanoutPage.ts'),
+      `${imports.join('\n')}\nexport const page = [${Array.from({ length: 21 }, (_, i) => `d${i + 1}`).join(', ')}];`,
+    );
+
+    const report = await analyzeImpact({
+      root,
+      diff: diffs.join(''),
+      targets: [{ kind: 'entry', id: 'fanout', file: 'src/pages/FanoutPage.ts' }],
+    });
+
+    expect(report.impacts[0]).toMatchObject({
+      target: { id: 'fanout' },
+      pathCount: 20,
+      knownMinimumPathCount: 21,
+      truncated: true,
+    });
+    expect(report.impacts[0].changedFiles).toHaveLength(21);
+    expect(report.diagnostics).toEqual([expect.objectContaining({
+      code: 'chain-limit-reached',
+      message: expect.stringContaining('returned 20 of at least 21'),
+      chainLimit: {
+        targetId: 'fanout',
+        returnedChainCount: 20,
+        knownMinimumChainCount: 21,
+        maxChainsPerTarget: 20,
+        maxTotalChains: 10_000,
+        limitCause: 'per-target',
+        omittedDependencyChain: expect.arrayContaining(['src/pages/FanoutPage.ts']),
+        recovery: {
+          cli: '--max-chains-per-target 40 --max-total-chains 10000',
+          config: '{"impact":{"maxChainsPerTarget":40,"maxTotalChains":10000}}',
+        },
+      },
+    })]);
+  });
+
+  it('keeps later impacted targets visible when the report-wide chain budget is exhausted', async () => {
+    writeFileSync(join(root, 'src/pages/FirstPage.ts'), "import { first } from '../utils/first'; export const page = first;");
+    writeFileSync(join(root, 'src/pages/SecondPage.ts'), "import { second } from '../utils/second'; export const page = second;");
+    writeFileSync(join(root, 'src/utils/first.ts'), "export const first = 'new';");
+    writeFileSync(join(root, 'src/utils/second.ts'), "export const second = 'new';");
+    const diff = [
+      ['first', 'first'],
+      ['second', 'second'],
+    ].map(([file, symbol]) => `diff --git a/src/utils/${file}.ts b/src/utils/${file}.ts\n--- a/src/utils/${file}.ts\n+++ b/src/utils/${file}.ts\n@@ -1 +1 @@\n-export const ${symbol} = 'old';\n+export const ${symbol} = 'new';\n`).join('');
+
+    const report = await analyzeImpact({
+      root,
+      diff,
+      targets: [
+        { kind: 'entry', id: 'first', file: 'src/pages/FirstPage.ts' },
+        { kind: 'entry', id: 'second', file: 'src/pages/SecondPage.ts' },
+      ],
+      maxTotalChains: 1,
+    });
+
+    expect(report.impactedTargetCount).toBe(2);
+    expect(report.impacts).toEqual([
+      expect.objectContaining({ target: expect.objectContaining({ id: 'first' }), pathCount: 1, truncated: false }),
+      expect.objectContaining({
+        target: expect.objectContaining({ id: 'second' }),
+        changedFiles: ['src/utils/second.ts'],
+        dependencyChains: [],
+        pathCount: 0,
+        knownMinimumPathCount: 1,
+        truncated: true,
+      }),
+    ]);
+    expect(report.diagnostics).toContainEqual(expect.objectContaining({
+      chainLimit: expect.objectContaining({ targetId: 'second', limitCause: 'total' }),
     }));
   });
 

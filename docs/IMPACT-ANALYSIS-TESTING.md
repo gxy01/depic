@@ -128,6 +128,10 @@ src/
 
 - 构造多路径图，验证 `maxChainsPerTarget` 和 `maxTotalChains` 的限制。
 - 构造字典序靠前的长链和靠后的直接链，验证截断时仍优先保留直接链，并设置目标级与报告级 `truncated` 标记。
+- 构造 21 条独立链验证默认 20 条上限：诊断必须包含 target、20 / at least 21、当前限制、
+  omitted-chain sample 与恢复设置；CLI 一次性覆盖后报告应完整。
+- 将全报告上限耗尽在前一 target，验证后续已证明受影响 target 仍出现在 `impacts`，
+  `pathCount: 0`、`knownMinimumPathCount: 1` 且有 target 级截断诊断。
 - 打乱 `ImpactTarget` 与 diff 文件顺序，多次运行，断言 JSON 结果字节级稳定或在标准化后完全一致。
 - 使用较大合成图验证算法在预期时间和内存范围内完成；基准只用于回归，不作为不稳定的单测门槛。
 

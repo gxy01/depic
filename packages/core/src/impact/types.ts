@@ -30,6 +30,21 @@ export interface ImpactOptions extends AnalyzeOptions {
 
 export type ImpactKind = 'direct' | 'transitive' | 'global';
 
+export interface ImpactChainLimitDetails {
+  targetId: string;
+  returnedChainCount: number;
+  knownMinimumChainCount: number;
+  maxChainsPerTarget: number;
+  maxTotalChains: number;
+  limitCause: 'per-target' | 'total' | 'both';
+  /** One proven omitted chain; additional omitted chains may exist. */
+  omittedDependencyChain: string[];
+  recovery: {
+    cli: string;
+    config: string;
+  };
+}
+
 export interface ImpactDiagnostic {
   level: 'warning';
   code:
@@ -44,6 +59,7 @@ export interface ImpactDiagnostic {
     | 'chain-limit-reached';
   message: string;
   files?: string[];
+  chainLimit?: ImpactChainLimitDetails;
 }
 
 export interface TargetImpact {
@@ -52,6 +68,8 @@ export interface TargetImpact {
   changedFiles: string[];
   dependencyChains: string[][];
   pathCount: number;
+  /** Present when truncated; the actual path count may be higher. */
+  knownMinimumPathCount?: number;
   truncated: boolean;
 }
 
