@@ -102,6 +102,11 @@ report.impacts; // [{ target, impact, dependencyChains, ... }]
 Markdown 文档链接可以变化而不阻断经校验的 no-op，未知标记和包含指令的注释仍受保护。
 diff 还原保留未改变的文件末尾换行。这些修复需要 `0.1.10` 或更高版本。
 
+从 `0.1.12` 起（Issue #27），重命名目标路径会作为 head 依赖图中的保守文件级变更，
+因此可为当前消费者产生正常的 `changedFiles`、`impacts` 和依赖链证据。
+`renamed-file` 诊断仍会标明目标路径，并在消息中包含旧路径，因为仍引用旧模块的消费者
+需要基线依赖图。删除文件仍只输出诊断；重命名目标不做符号级精化或 semantic no-op 检查。
+
 `analyze()` 和 `analyzeImpact()` 都会读取 `depic.config.json`。该文件可配置
 `include`、`exclude`、`tsconfigPath`、`extensions`、`symbolLevel`、
 `workspace` 与 `impact`；显式 API 参数优先。

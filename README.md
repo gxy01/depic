@@ -73,6 +73,11 @@ refinement when earlier declarations grow; plain-label HTTP(S) Markdown links
 can participate in checked documentation-only no-ops. Changed directives and
 uncertain cases remain conservative.
 
+From `0.1.12`, a renamed destination is conservatively propagated through the
+head dependency graph instead of being dropped. The `renamed-file` diagnostic
+still identifies the old path whose consumers require a baseline graph; deleted
+files remain diagnostic-only.
+
 For explicitly ignored generated-file changes, `impact.excludeChangedFiles` filters
 the input diff without removing modules from the dependency graph. Exclusions are
 reported as **not analyzed**, not unaffected. See the CLI guide below (this option

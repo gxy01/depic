@@ -29,6 +29,7 @@ const DEFAULT_GLOBAL_IMPACT_PATTERNS = [
 
 interface DiffFile {
   path: string;
+  oldPath?: string;
   patch: string;
   status: 'added' | 'modified' | 'deleted' | 'renamed';
 }
@@ -93,7 +94,7 @@ export async function analyzeImpact(options: ImpactOptions): Promise<ImpactRepor
   }
 
   const currentDiffFiles = diffFiles
-    .filter((file) => file.status === 'added' || file.status === 'modified')
+    .filter((file) => file.status === 'added' || file.status === 'modified' || file.status === 'renamed')
     .map((file) => file.path);
   const globalPatterns = [
     ...DEFAULT_GLOBAL_IMPACT_PATTERNS,
@@ -106,14 +107,22 @@ export async function analyzeImpact(options: ImpactOptions): Promise<ImpactRepor
   const changedFiles: string[] = [];
   const semanticNoops = new Set<string>();
   for (const file of diffFiles) {
-    if (file.status === 'deleted' || file.status === 'renamed') {
+    if (file.status === 'deleted') {
       diagnostics.push({
         level: 'warning',
-        code: file.status === 'deleted' ? 'deleted-file' : 'renamed-file',
-        message: `${file.status === 'deleted' ? 'Deleted' : 'Renamed'} file ${file.path} requires a baseline dependency graph for precise impact analysis.`,
+        code: 'deleted-file',
+        message: `Deleted file ${file.path} requires a baseline dependency graph for precise impact analysis.`,
         files: [file.path],
       });
       continue;
+    }
+    if (file.status === 'renamed') {
+      diagnostics.push({
+        level: 'warning',
+        code: 'renamed-file',
+        message: `Renamed destination ${file.path} is analyzed conservatively using the head dependency graph; consumers of the old path ${file.oldPath ?? '(unknown)'} require a baseline dependency graph for precise impact analysis.`,
+        files: [file.path],
+      });
     }
     if (globalChangedFiles.includes(file.path)) {
       changedFiles.push(file.path);
@@ -415,9 +424,12 @@ function parseUnifiedDiff(diff: string): DiffFile[] {
     const isDeleted = newMarker === '+++ /dev/null';
     const isAdded = oldMarker === '--- /dev/null';
     const isRenamed = Boolean(renameFrom || renameTo) || oldPath !== defaultNewPath;
-    const path = isDeleted ? oldPath : defaultNewPath;
+    const renamedOldPath = renameFrom?.slice('rename from '.length) ?? oldPath;
+    const renamedNewPath = renameTo?.slice('rename to '.length) ?? defaultNewPath;
+    const path = isDeleted ? oldPath : isRenamed ? renamedNewPath : defaultNewPath;
     files.push({
       path: normalizeRelativePath(path),
+      oldPath: isRenamed ? normalizeRelativePath(renamedOldPath) : undefined,
       patch: block,
       status: isRenamed ? 'renamed' : isDeleted ? 'deleted' : isAdded ? 'added' : 'modified',
     });

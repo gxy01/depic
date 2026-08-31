@@ -1,6 +1,6 @@
 # ADR 004: Conservative symbol refinement for impact
 
-Status: accepted for 0.1.8 (Issue #20).
+Status: accepted for 0.1.8 (Issue #20), amended for 0.1.12 (Issue #27).
 
 ## Context
 
@@ -24,7 +24,9 @@ namespace escapes, unresolved/ambiguous/cyclic exports, unverified hunks, struct
 edits or exhausted work/depth budgets. This is a deliberately limited subset,
 not a type checker, tree shaker or general alias/value-flow engine. False positives
 are acceptable when provenance cannot be established. Type-contract analysis is
-file-level. Deleted/renamed files retain the existing baseline-graph limitation.
+file-level. Deleted files retain the baseline-graph limitation. A renamed
+destination is propagated conservatively through the head graph without symbol
+refinement; the diagnostic preserves the old-path baseline limitation.
 
 Expose decisions in additive `symbolEvidence`, including negative refinements.
 Symbol witnesses are distinct from the existing file `dependencyChains`. CLI

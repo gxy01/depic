@@ -138,11 +138,13 @@ describe('impact-only changed file exclusions (issue #17)', () => {
   });
 
   it('does not hide a rename out of an excluded directory', async () => {
+    writeFileSync(join(root, 'src/a.ts'), 'export const value = 1;');
     const report = await analyzeImpact({
       root, targets: TARGETS, excludeChangedFiles: ['src/generated/**'],
       diff: 'diff --git a/src/generated/a.ts b/src/a.ts\nrename from src/generated/a.ts\nrename to src/a.ts\n',
     });
     expect(report.diagnostics).toEqual([expect.objectContaining({ code: 'renamed-file', files: ['src/a.ts'] })]);
+    expect(report.changedFiles).toEqual(['src/a.ts']);
   });
 
   it('treats regex metacharacters in filenames literally', async () => {
