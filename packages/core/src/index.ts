@@ -29,6 +29,7 @@ export type {
   ImpactOptions,
   ImpactKind,
   ImpactDiagnostic,
+  ImpactChainLimitDetails,
   TargetImpact,
   ImpactReport,
   ImpactSymbolEvidence,

@@ -12,7 +12,7 @@ Usage:
   depic cycles <root>        Detect circular dependencies
   depic dependents <file> [root]  Show files that depend on <file>
   depic stats <root>         Show dependency statistics
-  depic impact [root] --diff <path> [--targets <path>] --report <path>
+  depic impact [root] --diff <path> [--targets <path>] --report <path> [chain limits]
                               Report potentially impacted entries and packages
   depic web <root> [output]  Generate interactive HTML visualization
   depic serve <root> [port]  Start local web server with live visualization
@@ -86,6 +86,8 @@ Options:
   --diff <path>               Unified diff to analyze (required)
   --targets <path>            JSON target file; overrides configured targets
   --report <path>             Output path for the JSON report (required)
+  --max-chains-per-target <n> Override the per-target chain limit for this run
+  --max-total-chains <n>      Override the report-wide chain limit for this run
   -h, --help                  Show this help
 
 Configuration (depic.config.json):
@@ -190,9 +192,21 @@ export async function runCli(
         const index = args.indexOf(name);
         return index >= 0 ? args[index + 1] : undefined;
       };
+      const getPositiveIntegerOption = (name: string): number | undefined => {
+        const index = args.indexOf(name);
+        if (index < 0) return undefined;
+        const raw = args[index + 1];
+        const value = Number(raw);
+        if (!raw || raw.startsWith('--') || !Number.isInteger(value) || value < 1) {
+          throw new Error(`${name} requires a positive integer.`);
+        }
+        return value;
+      };
       const diff = getOption('--diff');
       const targets = getOption('--targets');
       const report = getOption('--report');
+      const maxChainsPerTarget = getPositiveIntegerOption('--max-chains-per-target');
+      const maxTotalChains = getPositiveIntegerOption('--max-total-chains');
       if (!diff || !report) {
         throw new Error('impact requires --diff <path> and --report <path>.');
       }
@@ -201,6 +215,7 @@ export async function runCli(
         resolve(diff),
         targets ? resolve(targets) : undefined,
         resolve(report),
+        { maxChainsPerTarget, maxTotalChains },
       )) + '\n');
       break;
     }

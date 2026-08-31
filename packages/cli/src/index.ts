@@ -1,4 +1,4 @@
-import { analyze, analyzeImpact, type ImpactTarget } from '@depic/core';
+import { analyze, analyzeImpact, type ImpactOptions, type ImpactTarget } from '@depic/core';
 import { generateHtml, startServer } from '@depic/web';
 import { relative, join } from 'node:path';
 import { writeFileSync, existsSync, readFileSync, appendFileSync } from 'node:fs';
@@ -35,6 +35,7 @@ export async function runImpact(
   diffPath: string,
   targetsPath: string | undefined,
   reportPath: string,
+  limits: Pick<ImpactOptions, 'maxChainsPerTarget' | 'maxTotalChains'> = {},
 ): Promise<string> {
   const diff = readFileSync(diffPath, 'utf-8');
   let targets: ImpactTarget[] | undefined;
@@ -50,6 +51,7 @@ export async function runImpact(
     root: rootDir,
     diff,
     targets,
+    ...limits,
   });
   writeFileSync(reportPath, JSON.stringify(report, null, 2) + '\n', 'utf-8');
 
@@ -65,6 +67,12 @@ export async function runImpact(
     }
     if (diagnostic.code === 'semantic-noop') {
       lines.push(`Semantic no-op files (checked AST equivalence): ${diagnostic.files?.join(', ')}`);
+    }
+    if (diagnostic.code === 'chain-limit-reached' && diagnostic.chainLimit) {
+      const detail = diagnostic.chainLimit;
+      lines.push(`Truncated target ${detail.targetId}: returned ${detail.returnedChainCount} / at least ${detail.knownMinimumChainCount} chains (limits: per-target=${detail.maxChainsPerTarget}, total=${detail.maxTotalChains}).`);
+      lines.push(`Omitted chain sample: ${detail.omittedDependencyChain.join(' -> ')}`);
+      lines.push(`Recovery: rerun with ${detail.recovery.cli} or set ${detail.recovery.config}`);
     }
   }
   if (report.diagnostics.length > 0) {

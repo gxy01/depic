@@ -90,6 +90,8 @@ describe('CLI commands', () => {
     expect(stdout).toContain('depic.config.json');
     expect(stdout).toContain('impact.maxChainsPerTarget');
     expect(stdout).toContain('impact.maxTotalChains');
+    expect(stdout).toContain('--max-chains-per-target');
+    expect(stdout).toContain('--max-total-chains');
   });
 
   it('analyze --dot outputs DOT format', async () => {
@@ -171,6 +173,58 @@ index 1111111..2222222 100644
       impactedTargetCount: 1,
       impacts: [{ target: { id: '/' }, impact: 'direct' }],
     });
+  });
+
+  it('makes truncation actionable and accepts one-off chain-limit overrides (issue #34)', async () => {
+    const diffFile = join(tmpDir, 'change.diff');
+    const reportFile = join(tmpDir, 'impact.json');
+    const imports: string[] = [];
+    const diffs: string[] = [];
+    for (let index = 1; index <= 3; index += 1) {
+      imports.push(`import { d${index} } from './d${index}';`);
+      writeFileSync(join(tmpDir, `d${index}.ts`), `export const d${index} = 'new';`);
+      diffs.push(`diff --git a/d${index}.ts b/d${index}.ts\n--- a/d${index}.ts\n+++ b/d${index}.ts\n@@ -1 +1 @@\n-export const d${index} = 'old';\n+export const d${index} = 'new';\n`);
+    }
+    writeFileSync(join(tmpDir, 'entry.ts'), `${imports.join('\n')}\nexport const entry = [d1, d2, d3];`);
+    writeFileSync(join(tmpDir, 'depic.config.json'), JSON.stringify({ impact: {
+      targets: [{ kind: 'entry', id: 'entry', file: 'entry.ts' }],
+      maxChainsPerTarget: 1,
+      maxTotalChains: 10,
+    } }));
+    writeFileSync(diffFile, diffs.join(''));
+
+    const limitedOutput = await runImpact(tmpDir, diffFile, undefined, reportFile);
+    expect(limitedOutput).toContain('Truncated target entry: returned 1 / at least 2 chains');
+    expect(limitedOutput).toContain('Omitted chain sample: entry.ts ->');
+    expect(limitedOutput).toContain('Recovery: rerun with --max-chains-per-target 2 --max-total-chains 10');
+    expect(JSON.parse(readFileSync(reportFile, 'utf8')).diagnostics[0].chainLimit).toMatchObject({
+      targetId: 'entry', returnedChainCount: 1, knownMinimumChainCount: 2,
+    });
+
+    let stdout = '';
+    const exitCode = await runCli([
+      'impact', tmpDir,
+      '--diff', diffFile,
+      '--report', reportFile,
+      '--max-chains-per-target', '3',
+      '--max-total-chains', '3',
+    ], (value) => { stdout += value; });
+    expect(exitCode).toBe(0);
+    expect(stdout).not.toContain('Truncated target');
+    expect(JSON.parse(readFileSync(reportFile, 'utf8'))).toMatchObject({
+      truncated: false,
+      impacts: [{ pathCount: 3, truncated: false }],
+    });
+  });
+
+  it.each([
+    ['--max-chains-per-target', '0'],
+    ['--max-chains-per-target', '1.5'],
+    ['--max-total-chains', 'nope'],
+  ])('rejects invalid one-off chain limit %s=%s', async (flag, value) => {
+    await expect(runCli([
+      'impact', tmpDir, '--diff', 'change.diff', '--report', 'report.json', flag, value,
+    ])).rejects.toThrow(`${flag} requires a positive integer.`);
   });
 
   it('impact reads targets from the shared depic config by default', async () => {

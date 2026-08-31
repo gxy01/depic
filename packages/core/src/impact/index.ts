@@ -178,8 +178,9 @@ export async function analyzeImpact(options: ImpactOptions): Promise<ImpactRepor
   const maxTotalChains = options.maxTotalChains
     ?? impactConfig?.maxTotalChains
     ?? DEFAULT_MAX_TOTAL_CHAINS;
-  if (maxChainsPerTarget < 1 || maxTotalChains < 1) {
-    throw new Error('maxChainsPerTarget and maxTotalChains must both be at least 1.');
+  if (!Number.isInteger(maxChainsPerTarget) || !Number.isInteger(maxTotalChains)
+    || maxChainsPerTarget < 1 || maxTotalChains < 1) {
+    throw new Error('maxChainsPerTarget and maxTotalChains must both be positive integers.');
   }
 
   let totalChainCount = 0;
@@ -197,6 +198,7 @@ export async function analyzeImpact(options: ImpactOptions): Promise<ImpactRepor
         if (!evidence.affected) targetChanges.delete(absolute);
       }
     }
+    const usedTotalChains = totalChainCount;
     const result = findTargetImpact(
       target,
       graph,
@@ -208,26 +210,53 @@ export async function analyzeImpact(options: ImpactOptions): Promise<ImpactRepor
     totalChainCount += result.chains.length;
     reportTruncated ||= result.truncated;
 
-    if (result.chains.length === 0) continue;
+    if (result.truncated && result.omittedWitness && result.limitCause) {
+      const suggestedPerTarget = ['per-target', 'both'].includes(result.limitCause)
+        ? Math.max(maxChainsPerTarget * 2, result.knownMinimum)
+        : maxChainsPerTarget;
+      const suggestedTotal = ['total', 'both'].includes(result.limitCause)
+        ? Math.max(maxTotalChains * 2, usedTotalChains + result.knownMinimum)
+        : maxTotalChains;
+      const cli = `--max-chains-per-target ${suggestedPerTarget} --max-total-chains ${suggestedTotal}`;
+      const config = JSON.stringify({ impact: {
+        maxChainsPerTarget: suggestedPerTarget,
+        maxTotalChains: suggestedTotal,
+      } });
+      const omittedDependencyChain = result.omittedWitness.map((file) => relativePath(root, file));
+      diagnostics.push({
+        level: 'warning',
+        code: 'chain-limit-reached',
+        message: `Target "${target.target.id}" returned ${result.chains.length} of at least ${result.knownMinimum} dependency chains. Active limits: maxChainsPerTarget=${maxChainsPerTarget}, maxTotalChains=${maxTotalChains}. Rerun with ${cli} or set ${config}.`,
+        files: [omittedDependencyChain[omittedDependencyChain.length - 1]],
+        chainLimit: {
+          targetId: target.target.id,
+          returnedChainCount: result.chains.length,
+          knownMinimumChainCount: result.knownMinimum,
+          maxChainsPerTarget,
+          maxTotalChains,
+          limitCause: result.limitCause,
+          omittedDependencyChain,
+          recovery: { cli, config },
+        },
+      });
+    }
+
+    const evidenceChains = result.chains.length > 0
+      ? [...result.chains, ...(result.omittedWitness ? [result.omittedWitness] : [])]
+      : result.omittedWitness ? [result.omittedWitness] : [];
+    if (evidenceChains.length === 0) continue;
     const changedForTarget = [...new Set(
-      result.chains.map((chain) => relativePath(root, chain[chain.length - 1])),
+      evidenceChains.map((chain) => relativePath(root, chain[chain.length - 1])),
     )].sort();
-    const isDirect = result.chains.some((chain) => isDirectImpactChain(chain, graph));
+    const isDirect = evidenceChains.some((chain) => isDirectImpactChain(chain, graph));
     impacts.push({
       target: target.target,
       impact: isDirect ? 'direct' : 'transitive',
       changedFiles: changedForTarget,
       dependencyChains: result.chains.map((chain) => chain.map((file) => relativePath(root, file))),
       pathCount: result.chains.length,
+      ...(result.truncated ? { knownMinimumPathCount: result.knownMinimum } : {}),
       truncated: result.truncated,
-    });
-  }
-
-  if (reportTruncated) {
-    diagnostics.push({
-      level: 'warning',
-      code: 'chain-limit-reached',
-      message: 'Dependency chain limits were reached; the report is truncated.',
     });
   }
 
@@ -305,11 +334,25 @@ function findTargetImpact(
   includeTypeOnly: boolean,
   maxChainsPerTarget: number,
   remainingTotalChains: number,
-): { chains: string[][]; truncated: boolean } {
+): {
+  chains: string[][];
+  truncated: boolean;
+  knownMinimum: number;
+  omittedWitness?: string[];
+  limitCause?: 'per-target' | 'total' | 'both';
+} {
   const chains: string[][] = [];
-  if (changedFiles.size === 0) return { chains, truncated: false };
-  const chainLimit = Math.min(maxChainsPerTarget, remainingTotalChains);
-  if (chainLimit < 1) return { chains, truncated: true };
+  if (changedFiles.size === 0) return { chains, truncated: false, knownMinimum: 0 };
+  const chainLimit = Math.max(0, Math.min(maxChainsPerTarget, remainingTotalChains));
+  const limitCause: 'per-target' | 'total' | 'both' = maxChainsPerTarget === remainingTotalChains ? 'both'
+    : maxChainsPerTarget < remainingTotalChains ? 'per-target' : 'total';
+  const truncated = (omittedWitness: string[]) => ({
+    chains: chains.sort(compareChains),
+    truncated: true,
+    knownMinimum: chains.length + 1,
+    omittedWitness,
+    limitCause,
+  });
 
   const entryFiles = [...target.entryFiles].sort((a, b) =>
     Number(changedFiles.has(b)) - Number(changedFiles.has(a)) || a.localeCompare(b),
@@ -319,16 +362,13 @@ function findTargetImpact(
 
   for (const entryFile of entryFiles) {
     if (changedFiles.has(entryFile)) {
-      if (chains.length >= chainLimit) return { chains, truncated: true };
-      chains.push([entryFile]);
+      const chain = [entryFile];
+      if (chains.length >= chainLimit) return truncated(chain);
+      chains.push(chain);
       continue;
     }
     queue.push([entryFile]);
     bestDepth.set(entryFile, 0);
-  }
-
-  if (chains.length >= chainLimit) {
-    return { chains, truncated: queue.length > 0 };
   }
 
   let cursor = 0;
@@ -342,18 +382,13 @@ function findTargetImpact(
       .filter((edge) => includeTypeOnly || !isTypeOnlyEdge(edge, graph))
       .sort((a, b) => a.target.localeCompare(b.target));
 
-    for (let edgeIndex = 0; edgeIndex < edges.length; edgeIndex += 1) {
-      const edge = edges[edgeIndex];
+    for (const edge of edges) {
       if (seenTargets.has(edge.target) || path.includes(edge.target)) continue;
       seenTargets.add(edge.target);
       const nextPath = [...path, edge.target];
       if (changedFiles.has(edge.target)) {
+        if (chains.length >= chainLimit) return truncated(nextPath);
         chains.push(nextPath);
-        if (chains.length >= chainLimit) {
-          const hasUnexploredPaths = edgeIndex < edges.length - 1 || cursor < queue.length;
-          chains.sort(compareChains);
-          return { chains, truncated: hasUnexploredPaths };
-        }
         continue;
       }
 
@@ -368,7 +403,7 @@ function findTargetImpact(
   }
 
   chains.sort(compareChains);
-  return { chains, truncated: false };
+  return { chains, truncated: false, knownMinimum: chains.length };
 }
 
 function isTypeOnlyEdge(edge: Edge, graph: DependencyGraph): boolean {

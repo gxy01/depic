@@ -123,6 +123,18 @@ prune consumers of unrelated members. Dynamic reads, mutation, whole-object
 escape, spreads, accessors, and uncertain shapes remain file-level and expose a
 `fallbackReason` in `symbolEvidence`.
 
+### Actionable chain truncation (0.1.15+)
+
+When chain limits are reached, compact output names every truncated target,
+prints returned/known-minimum counts and the active limits, shows one proven
+omitted chain, and provides copyable recovery settings. Override config for one
+run with:
+
+```bash
+depic impact . --diff change.diff --report report.json \
+  --max-chains-per-target 40 --max-total-chains 20000
+```
+
 ### Ignore generated changes only
 
 Merge this optional setting into the existing config; keep your `impact.targets`:
@@ -164,7 +176,7 @@ the entire `.depic/` runtime artifact directory stays ignored. Review and commit
 the root `depic.config.json` when it should be shared with the team.
 
 For an ephemeral job that cannot modify the manifest, invoke a pinned version with
-`pnpm dlx @depic/cli@0.1.14 impact ...`.
+`pnpm dlx @depic/cli@0.1.15 impact ...`.
 
 ## License
 

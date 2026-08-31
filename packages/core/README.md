@@ -150,6 +150,13 @@ reads are supported. Dynamic/computed reads, mutation, whole-object escape,
 spreads, accessors, unsupported member values, and shape changes retain explicit
 file-level fallback.
 
+From `0.1.15` (Issue #34), `chain-limit-reached` is emitted once per truncated
+target with structured `chainLimit` details: returned and known-minimum counts,
+active per-target/report limits, the limiting scope, one proven omitted chain,
+and copyable CLI/config recovery settings. A truncated `TargetImpact` also
+exposes `knownMinimumPathCount`. Report-wide exhaustion no longer silently drops
+a target once an omitted chain has been proven.
+
 `analyze()` and `analyzeImpact()` both load `depic.config.json`. The file accepts
 `include`, `exclude`, `tsconfigPath`, `extensions`, `symbolLevel`, `workspace`,
 and an `impact` object. Explicit API options override configured values.
