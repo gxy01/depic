@@ -198,6 +198,37 @@ index 1111111..2222222 100644
     });
   });
 
+  it('impact reports current consumers of a renamed destination and baseline uncertainty', async () => {
+    const diffFile = join(tmpDir, 'rename.diff');
+    const reportFile = join(tmpDir, 'impact.json');
+    writeFileSync(join(tmpDir, 'page.ts'), 'import { value } from "./new-helper"; export const page = value;');
+    writeFileSync(join(tmpDir, 'new-helper.ts'), 'export const value = "new";');
+    writeFileSync(join(tmpDir, 'depic.config.json'), JSON.stringify({
+      impact: { targets: [{ kind: 'entry', id: '/page', file: 'page.ts' }] },
+    }));
+    writeFileSync(diffFile, `diff --git a/old-helper.ts b/new-helper.ts
+similarity index 78%
+rename from old-helper.ts
+rename to new-helper.ts
+--- a/old-helper.ts
++++ b/new-helper.ts
+@@ -1 +1 @@
+-export const value = "old";
++export const value = "new";
+`);
+
+    const output = await runImpact(tmpDir, diffFile, undefined, reportFile);
+    const report = JSON.parse(readFileSync(reportFile, 'utf8'));
+
+    expect(output).toContain('Impacted targets: 1 / 1');
+    expect(report).toMatchObject({
+      changedFiles: ['new-helper.ts'],
+      impacts: [{ target: { id: '/page' }, changedFiles: ['new-helper.ts'] }],
+      diagnostics: [{ code: 'renamed-file', files: ['new-helper.ts'] }],
+    });
+    expect(report.diagnostics[0].message).toContain('old-helper.ts');
+  });
+
   it('init ignores the entire runtime artifact directory', () => {
     const output = runInit(tmpDir);
     const gitignore = readFileSync(join(tmpDir, '.gitignore'), 'utf-8');

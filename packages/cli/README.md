@@ -98,6 +98,15 @@ Markdown documentation links: these no longer block supported refinement merely
 because earlier declarations grow or a documentation URL changes. Directive edits
 and uncertain attachments still fall back; no configuration change is needed.
 
+### Renamed files (0.1.12+)
+
+A renamed destination is conservatively analyzed as a file-level change using the
+head checkout's dependency graph. Current consumers can therefore appear in
+`impacts` even when they are unchanged in the diff. The report also emits a
+`renamed-file` warning whose message identifies the old path: consumers of that old
+path cannot be analyzed precisely without a baseline graph. Deleted files remain
+diagnostic-only, and rename destinations are not eligible for symbol/no-op pruning.
+
 ### Ignore generated changes only
 
 Merge this optional setting into the existing config; keep your `impact.targets`:
@@ -139,7 +148,7 @@ the entire `.depic/` runtime artifact directory stays ignored. Review and commit
 the root `depic.config.json` when it should be shared with the team.
 
 For an ephemeral job that cannot modify the manifest, invoke a pinned version with
-`pnpm dlx @depic/cli@0.1.11 impact ...`.
+`pnpm dlx @depic/cli@0.1.12 impact ...`.
 
 ## License
 

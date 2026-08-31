@@ -20,6 +20,20 @@ index 1111111..2222222 100644
 `;
 }
 
+function renamedDiff(oldFile: string, newFile: string, withEdit: boolean): string {
+  return `diff --git a/${oldFile} b/${newFile}
+similarity index ${withEdit ? '78' : '100'}%
+rename from ${oldFile}
+rename to ${newFile}
+${withEdit ? `index 1111111..2222222 100644
+--- a/${oldFile}
++++ b/${newFile}
+@@ -1 +1 @@
+-export const value = 'old';
++export const value = 'new';
+` : ''}`;
+}
+
 describe('analyzeImpact', () => {
   let root: string;
 
@@ -53,6 +67,67 @@ describe('analyzeImpact', () => {
       'src/components/Card.tsx',
       'src/utils/format.ts',
     ]);
+  });
+
+  it.each([
+    ['a pure rename', false],
+    ['a rename with edited contents', true],
+  ])('conservatively propagates the head destination for %s', async (_case, withEdit) => {
+    writeFileSync(
+      join(root, 'src/pages/RenamedPage.ts'),
+      "import { value } from '../utils/new-helper'; export const RenamedPage = value;",
+    );
+    writeFileSync(
+      join(root, 'src/utils/new-helper.ts'),
+      `export const value = '${withEdit ? 'new' : 'old'}';`,
+    );
+
+    const report = await analyzeImpact({
+      root,
+      diff: renamedDiff('src/utils/old-helper.ts', 'src/utils/new-helper.ts', withEdit),
+      targets: [{ kind: 'entry', id: '/renamed', file: 'src/pages/RenamedPage.ts' }],
+    });
+
+    expect(report.changedFiles).toEqual(['src/utils/new-helper.ts']);
+    expect(report.impacts).toEqual([expect.objectContaining({
+      target: expect.objectContaining({ id: '/renamed' }),
+      impact: 'direct',
+      changedFiles: ['src/utils/new-helper.ts'],
+      dependencyChains: [[
+        'src/pages/RenamedPage.ts',
+        'src/utils/new-helper.ts',
+      ]],
+    })]);
+    expect(report.diagnostics).toContainEqual(expect.objectContaining({
+      code: 'renamed-file',
+      files: ['src/utils/new-helper.ts'],
+      message: expect.stringMatching(/head dependency graph.*old-helper\.ts.*baseline dependency graph/),
+    }));
+    expect(report.symbolEvidence).toContainEqual(expect.objectContaining({
+      targetId: '/renamed',
+      changedFile: 'src/utils/new-helper.ts',
+      precision: 'file',
+      affected: true,
+      fallbackReason: 'unsupported-diff',
+    }));
+  });
+
+  it('treats a renamed global-impact destination as global while retaining uncertainty', async () => {
+    writeFileSync(join(root, 'package.json'), '{"name":"fixture"}');
+
+    const report = await analyzeImpact({
+      root,
+      diff: renamedDiff('package.old.json', 'package.json', false),
+      targets: TARGETS,
+    });
+
+    expect(report.changedFiles).toEqual(['package.json']);
+    expect(report.impacts).toHaveLength(2);
+    expect(report.impacts.every((impact) => impact.impact === 'global')).toBe(true);
+    expect(report.diagnostics).toContainEqual(expect.objectContaining({
+      code: 'renamed-file',
+      message: expect.stringContaining('package.old.json'),
+    }));
   });
 
   it('marks direct page and direct dependency changes as direct', async () => {

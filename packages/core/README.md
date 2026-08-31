@@ -128,6 +128,14 @@ Plain-label HTTP(S) Markdown links in documentation can change without blocking 
 checked no-op; unknown markup and directive-bearing comments remain protected.
 Diff reconstruction preserves unchanged EOF newlines. These fixes require `0.1.10` or later.
 
+From `0.1.12` (Issue #27), a renamed file's destination is treated as a conservative
+file-level change in the head dependency graph. It can therefore produce normal
+`changedFiles`, `impacts`, and dependency-chain evidence for current consumers.
+The `renamed-file` diagnostic names the destination and includes the old path in
+its message because consumers that still reference the old module require a
+baseline dependency graph. Deleted files remain diagnostic-only. Rename
+destinations are not symbol-refined or checked as semantic no-ops.
+
 `analyze()` and `analyzeImpact()` both load `depic.config.json`. The file accepts
 `include`, `exclude`, `tsconfigPath`, `extensions`, `symbolLevel`, `workspace`,
 and an `impact` object. Explicit API options override configured values.
