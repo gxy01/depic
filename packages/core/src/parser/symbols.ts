@@ -16,6 +16,8 @@ export interface SymbolDeclaration {
   startLine: number;
   endLine: number;
   references: SymbolReference[];
+  /** Statically modeled members for a safe object-literal declaration. */
+  members?: string[];
 }
 
 export interface SymbolBinding {
@@ -48,6 +50,16 @@ function nodes(value: unknown): AstNode[] {
   return Array.isArray(value) ? value.flatMap((item) => node(item) ? [node(item)!] : []) : [];
 }
 
+function supportedDeclarationValue(value: AstNode): boolean {
+  if ([
+    'FunctionDeclaration', 'FunctionExpression', 'ArrowFunctionExpression',
+    'StringLiteral', 'NumericLiteral', 'BooleanLiteral', 'NullLiteral', 'BigIntLiteral', 'ObjectExpression',
+  ].includes(value.type)) return true;
+  // A static member call is traceable to that member. Bare calls remain
+  // conservative because they can hide arbitrary module-initialization effects.
+  return value.type === 'CallExpression' && node(value.callee)?.type === 'MemberExpression';
+}
+
 /** Only prove precision for understood syntax; unsupported code stays file-level. */
 export function parseSymbolModule(source: string, file: string, includeTypeOnly = false): SymbolModule {
   const result: SymbolModule = { declarations: new Map(), imports: new Map(), exports: new Map(), stars: [], typeStars: [] };
@@ -67,6 +79,12 @@ export function parseSymbolModule(source: string, file: string, includeTypeOnly 
     }
     if (!value || typeof value !== 'object') return;
     const n = node(value);
+    if (n?.type === 'AssignmentExpression' && node(n.left)?.type === 'MemberExpression') fallback('member-mutation');
+    if (n?.type === 'UpdateExpression' && node(n.argument)?.type === 'MemberExpression') fallback('member-mutation');
+    if (n?.type === 'UnaryExpression' && n.operator === 'delete' && node(n.argument)?.type === 'MemberExpression') {
+      fallback('member-mutation');
+    }
+    if (n && ['ThisExpression', 'Super'].includes(n.type)) fallback('object-escape');
     if (includeTypeOnly && n && [
       'TsIndexedAccessType', 'TsConditionalType', 'TsMappedType', 'TsInferType', 'TsImportType',
     ].includes(n.type)) fallback('unsupported-type');
@@ -128,21 +146,67 @@ export function parseSymbolModule(source: string, file: string, includeTypeOnly 
     for (const item of items) {
       const local = defaultName ?? name(item.id ?? item.identifier);
       const value = n.type === 'VariableDeclaration' ? node(item.init) : item;
-      if (!local || !value || (!isType && ![
-        'FunctionDeclaration', 'FunctionExpression', 'ArrowFunctionExpression',
-        'StringLiteral', 'NumericLiteral', 'BooleanLiteral', 'NullLiteral', 'BigIntLiteral',
-      ].includes(value.type)) || (n.type === 'VariableDeclaration' && n.kind !== 'const')
+      if (!local || !value || (!isType && !supportedDeclarationValue(value))
+        || (n.type === 'VariableDeclaration' && n.kind !== 'const')
         || nodes(value.decorators).length > 0) {
         fallback('top-level-effects');
         continue;
       }
       const span = location.span as { start: number; end: number };
       const refs: SymbolReference[] = [];
-      references(value, refs);
+      const memberNames: string[] = [];
+      if (value.type === 'ObjectExpression') {
+        for (const property of nodes(value.properties)) {
+          if (['GetterProperty', 'SetterProperty'].includes(property.type)) {
+            fallback('object-accessor');
+            continue;
+          }
+          if (property.type === 'SpreadElement') {
+            fallback('object-spread');
+            continue;
+          }
+          if (!['KeyValueProperty', 'MethodProperty'].includes(property.type)) {
+            fallback('unsupported-object-member');
+            continue;
+          }
+          const propertyKey = node(property.key);
+          const literal = propertyKey?.type === 'Computed' ? node(propertyKey.expression) : propertyKey;
+          if (!literal || !['Identifier', 'StringLiteral'].includes(literal.type)
+            || (propertyKey?.type === 'Computed' && literal.type !== 'StringLiteral')) {
+            fallback('dynamic-member');
+            continue;
+          }
+          const member = name(literal);
+          const memberValue = property.type === 'KeyValueProperty' ? node(property.value) : property;
+          if (!member || !memberValue || (property.type === 'KeyValueProperty' && ![
+            'FunctionExpression', 'ArrowFunctionExpression',
+            'StringLiteral', 'NumericLiteral', 'BooleanLiteral', 'NullLiteral', 'BigIntLiteral',
+          ].includes(memberValue.type)) || memberNames.includes(member)) {
+            fallback(memberNames.includes(member) ? 'duplicate-binding' : 'unsupported-object-member');
+            continue;
+          }
+          const memberRefs: SymbolReference[] = [];
+          references(property.type === 'MethodProperty' ? property.body : memberValue, memberRefs);
+          const keySpan = literal.span as { start: number; end: number };
+          const valueSpan = memberValue.span as { start: number; end: number };
+          const qualified = `${local}.${member}`;
+          result.declarations.set(qualified, {
+            name: qualified,
+            kind: 'value',
+            startLine: lineAt(keySpan.start - 1),
+            endLine: lineAt(valueSpan.end - 2),
+            references: memberRefs,
+          });
+          memberNames.push(member);
+        }
+      } else {
+        references(value, refs);
+      }
       if (includeTypeOnly && n.type === 'VariableDeclaration') references(node(item.id)?.typeAnnotation, refs);
       if (result.declarations.has(local) || result.imports.has(local)) fallback('duplicate-binding');
       result.declarations.set(local, {
         name: local, kind: isType ? 'type' : 'value', startLine: lineAt(span.start - 1), endLine: lineAt(span.end - 2), references: refs,
+        ...(value.type === 'ObjectExpression' ? { members: memberNames } : {}),
       });
       if (exported) bind(result.exports, defaultName ? 'default' : local, { name: local });
     }

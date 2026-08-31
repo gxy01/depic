@@ -101,6 +101,13 @@ Oxlint 指令不会再被检查型 no-op 剔除。`oxlint-disable` / `oxlint-ena
 规则列表修改、增删、改序和控制范围移动均保留保守文件级影响；未变化且 attachment
 稳定的范围包装仍允许在文件内部进行受支持的符号级/类型精化。
 
+### 导出对象成员（0.1.14+）
+
+受支持的导出对象字面量会在 `changedSymbols` 和符号链中使用 `client.fetchA`
+这类限定名称。静态点访问和字符串键访问可剔除只消费其他成员的目标；动态访问、写入、
+整体对象逃逸、spread、getter/setter 和不确定结构仍按文件级传播，并在
+`symbolEvidence` 中给出 `fallbackReason`。
+
 ### 只忽略生成文件的变更
 
 把下面的可选设置合并到已有配置，保留原来的 `impact.targets`：
@@ -138,7 +145,7 @@ pnpm exec depic impact . \
 运行产物目录保持忽略。需要团队共享时，请审查并提交根目录的
 `depic.config.json`。
 
-无法修改依赖清单的临时任务可使用 `pnpm dlx @depic/cli@0.1.13 impact ...`，并显式固定版本。
+无法修改依赖清单的临时任务可使用 `pnpm dlx @depic/cli@0.1.14 impact ...`，并显式固定版本。
 
 ## License
 

@@ -112,6 +112,11 @@ diff 还原保留未改变的文件末尾换行。这些修复需要 `0.1.10` �
 `oxlint-enable` 范围包装使用稳定的声明边界 attachment；只要指令控制范围不变，
 被包装代码的受支持符号级与类型精化仍然可用。
 
+从 `0.1.14` 起（Issue #33），安全的导出对象字面量及其静态成员读取会建模为
+`client.fetchA` 这类限定符号，因此修改一个成员时可剔除只使用其他成员的消费者。
+支持静态字符串键读取；动态/计算访问、写入、整体对象逃逸、spread、getter/setter、
+不支持的成员值和结构变化仍明确回退为文件级影响。
+
 `analyze()` 和 `analyzeImpact()` 都会读取 `depic.config.json`。该文件可配置
 `include`、`exclude`、`tsconfigPath`、`extensions`、`symbolLevel`、
 `workspace` 与 `impact`；显式 API 参数优先。

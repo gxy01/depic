@@ -82,6 +82,11 @@ From `0.1.13`, Oxlint control comments are protected from `semantic-noop`
 pruning. Directive changes propagate conservatively, while unchanged
 `oxlint-disable` / `oxlint-enable` wrappers retain safe symbol/type refinement.
 
+From `0.1.14`, supported exported object literals are refined by static member.
+A change to `client.fetchA` can prune consumers that only read `client.fetchB`.
+Dynamic access, mutation, object escape, spreads, accessors, and uncertain shapes
+retain conservative file-level impact.
+
 For explicitly ignored generated-file changes, `impact.excludeChangedFiles` filters
 the input diff without removing modules from the dependency graph. Exclusions are
 reported as **not analyzed**, not unaffected. See the CLI guide below (this option

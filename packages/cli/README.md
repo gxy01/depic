@@ -115,6 +115,14 @@ reordering, and range movement remain conservative file-level impact. Unchanged
 range wrappers with stable attachment still allow supported symbol/type
 refinement inside the wrapped file.
 
+### Exported object members (0.1.14+)
+
+For supported exported object literals, `changedSymbols` and symbol chains use
+qualified names such as `client.fetchA`. Static dot and string-key reads can
+prune consumers of unrelated members. Dynamic reads, mutation, whole-object
+escape, spreads, accessors, and uncertain shapes remain file-level and expose a
+`fallbackReason` in `symbolEvidence`.
+
 ### Ignore generated changes only
 
 Merge this optional setting into the existing config; keep your `impact.targets`:
@@ -156,7 +164,7 @@ the entire `.depic/` runtime artifact directory stays ignored. Review and commit
 the root `depic.config.json` when it should be shared with the team.
 
 For an ephemeral job that cannot modify the manifest, invoke a pinned version with
-`pnpm dlx @depic/cli@0.1.13 impact ...`.
+`pnpm dlx @depic/cli@0.1.14 impact ...`.
 
 ## License
 

@@ -143,6 +143,13 @@ pruning and retains conservative impact. Unchanged `oxlint-disable` /
 supported symbol and type refinement remains available when the wrapped code
 changes without altering the directive range.
 
+From `0.1.14` (Issue #33), safe exported object literals and their static member
+reads are modeled as qualified symbols such as `client.fetchA`. A change to one
+member can therefore prune consumers of an unrelated member. Static string-key
+reads are supported. Dynamic/computed reads, mutation, whole-object escape,
+spreads, accessors, unsupported member values, and shape changes retain explicit
+file-level fallback.
+
 `analyze()` and `analyzeImpact()` both load `depic.config.json`. The file accepts
 `include`, `exclude`, `tsconfigPath`, `extensions`, `symbolLevel`, `workspace`,
 and an `impact` object. Explicit API options override configured values.

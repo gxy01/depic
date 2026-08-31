@@ -79,7 +79,12 @@ export function changedSymbols(source: string, patch: string, file: string, curr
     for (const line of touched) {
       const declarations = [...module.declarations.values()].filter((decl) => decl.startLine <= line && line <= decl.endLine);
       if (declarations.length === 0) throw new SymbolFallback('change-outside-declaration');
-      for (const decl of declarations) changed.add(decl.name);
+      // A modeled object and its member overlap by construction. Prefer the
+      // member declaration; same-line sibling members remain conservative.
+      const mostSpecific = declarations.filter((decl) => !declarations.some((candidate) => (
+        candidate.name.startsWith(`${decl.name}.`)
+      )));
+      for (const decl of mostSpecific) changed.add(decl.name);
     }
   }
   return [...changed].sort();
