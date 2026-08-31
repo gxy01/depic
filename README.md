@@ -78,6 +78,10 @@ head dependency graph instead of being dropped. The `renamed-file` diagnostic
 still identifies the old path whose consumers require a baseline graph; deleted
 files remain diagnostic-only.
 
+From `0.1.13`, Oxlint control comments are protected from `semantic-noop`
+pruning. Directive changes propagate conservatively, while unchanged
+`oxlint-disable` / `oxlint-enable` wrappers retain safe symbol/type refinement.
+
 For explicitly ignored generated-file changes, `impact.excludeChangedFiles` filters
 the input diff without removing modules from the dependency graph. Exclusions are
 reported as **not analyzed**, not unaffected. See the CLI guide below (this option

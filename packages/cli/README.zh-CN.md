@@ -95,6 +95,12 @@ interface/type-alias 传播。`changedSymbols` 标识声明，不是字段；两
 指出旧路径：缺少基线图时，仍无法精确分析继续引用旧路径的消费者。删除文件仍只输出诊断，
 重命名目标不参与符号级精化或 no-op 剔除。
 
+### Oxlint 控制注释（0.1.13+）
+
+Oxlint 指令不会再被检查型 no-op 剔除。`oxlint-disable` / `oxlint-enable` 切换、
+规则列表修改、增删、改序和控制范围移动均保留保守文件级影响；未变化且 attachment
+稳定的范围包装仍允许在文件内部进行受支持的符号级/类型精化。
+
 ### 只忽略生成文件的变更
 
 把下面的可选设置合并到已有配置，保留原来的 `impact.targets`：
@@ -132,7 +138,7 @@ pnpm exec depic impact . \
 运行产物目录保持忽略。需要团队共享时，请审查并提交根目录的
 `depic.config.json`。
 
-无法修改依赖清单的临时任务可使用 `pnpm dlx @depic/cli@0.1.12 impact ...`，并显式固定版本。
+无法修改依赖清单的临时任务可使用 `pnpm dlx @depic/cli@0.1.13 impact ...`，并显式固定版本。
 
 ## License
 

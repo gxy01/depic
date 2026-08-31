@@ -136,6 +136,13 @@ its message because consumers that still reference the old module require a
 baseline dependency graph. Deleted files remain diagnostic-only. Rename
 destinations are not symbol-refined or checked as semantic no-ops.
 
+From `0.1.13` (Issue #31), Oxlint control comments are protected directives.
+Adding, removing, changing, reordering, or moving them prevents `semantic-noop`
+pruning and retains conservative impact. Unchanged `oxlint-disable` /
+`oxlint-enable` range wrappers use stable declaration-boundary attachment, so
+supported symbol and type refinement remains available when the wrapped code
+changes without altering the directive range.
+
 `analyze()` and `analyzeImpact()` both load `depic.config.json`. The file accepts
 `include`, `exclude`, `tsconfigPath`, `extensions`, `symbolLevel`, `workspace`,
 and an `impact` object. Explicit API options override configured values.

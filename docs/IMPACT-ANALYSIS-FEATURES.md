@@ -234,6 +234,15 @@ depic impact \
 - 反向还原 diff 保留未改变的 EOF 换行；涉及换行缺失标记的 diff 继续回退，不推测旧文件状态。
 - 不新增配置、不改变报告结构；以上修复需要 `0.1.10` 或更高版本，`0.1.9` 不支持。
 
+## Oxlint 控制注释（0.1.13 / Issue #31）
+
+- 含 Oxlint 控制标记的注释按受保护指令处理，不参与普通文档注释归一化。
+- `oxlint-disable` / `oxlint-enable` 的原文、规则列表、顺序和声明边界 attachment 必须一致；
+  增删、改写、改序或跨声明移动均触发 `directive-comment-changed` 文件级回退。
+- 未变化的范围包装允许内部声明增长，并继续使用既有的安全符号级/类型精化；
+  `oxlint-disable-next-line` 等行敏感形式仍保留严格行位置。
+- target 自身与 dependency 文件均不得因 Oxlint 指令变化产生 `semantic-noop`。
+
 ## 非目标
 
 - 不在 Depic 内部识别路由、框架组件、页面或任务入口。

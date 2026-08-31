@@ -54,6 +54,12 @@ describe('checked source structure equivalence', () => {
     expect(compareSourceStructure(before, after, 'test.ts')).toEqual({ equivalent: false, protectedCommentsChanged: false });
   });
 
+  it('keeps unchanged Oxlint wrappers attached after a declaration grows', () => {
+    const before = '// oxlint-disable no-console\nexport interface UserConfig { name?: string }\nexport interface OtherConfig { label?: string }\n// oxlint-enable no-console';
+    const after = before.replace('name?: string', 'name?: string; enabled?: boolean');
+    expect(compareSourceStructure(before, after, 'test.ts')).toEqual({ equivalent: false, protectedCommentsChanged: false });
+  });
+
   it('anchors a directive between declarations independently of preceding code length', () => {
     const before = 'export interface A { name: string }\n/* eslint-disable */\nexport interface B { x: string }\n/* eslint-enable */';
     expect(compareSourceStructure(before, before.replace('name: string', 'name: string; age: number'), 'test.ts').protectedCommentsChanged).toBe(false);
@@ -87,6 +93,12 @@ describe('checked source structure equivalence', () => {
     ['const a = 1;', '/* eslint-disable */\nconst a = 1;'],
     ['/* eslint-disable */\nconst a = 1;', 'const a = 1;'],
     ['/* eslint-disable */\nconst a = 1;', '/* eslint-enable */\nconst a = 1;'],
+    ['// oxlint-disable no-console\nconst a = 1;', '// oxlint-enable no-console\nconst a = 1;'],
+    ['// oxlint-disable no-console\nconst a = 1;', '// oxlint-disable no-debugger\nconst a = 1;'],
+    ['const a = 1;', '// oxlint-disable no-console\nconst a = 1;'],
+    ['// oxlint-disable no-console\nconst a = 1;', 'const a = 1;'],
+    ['// oxlint-disable no-console\nconst a = 1;\nconst b = 2;', 'const a = 1;\n// oxlint-disable no-console\nconst b = 2;'],
+    ['// oxlint-disable-next-line no-console\nconst a = 1;', '// oxlint-disable-next-line no-console\n// docs\nconst a = 1;'],
     ['// @ts-ignore\nconst a = 1;\nconst b = 2;', '// @ts-ignore\nconst b = 2;\nconst a = 1;'],
   ])('protects directive identity, ordering and controlled ranges', (before, after) => {
     expect(compareSourceStructure(before, after, 'test.ts').protectedCommentsChanged).toBe(true);
