@@ -28,6 +28,37 @@ describe('type declarations and semantic no-ops (issues #22/#23)', () => {
     return 'diff --git a/models.ts b/models.ts\n--- a/models.ts\n+++ b/models.ts\n@@ -2,2 +2,3 @@\n   name?: string;\n+  enabled?: boolean;\n }\n';
   }
 
+  const oxlintDirectiveChanges = [
+    {
+      change: 'enable/disable',
+      before: '// oxlint-disable no-console\nexport const f = () => 1;',
+      after: '// oxlint-enable no-console\nexport const f = () => 1;',
+    },
+    {
+      change: 'rule list',
+      before: '// oxlint-disable no-console\nexport const f = () => 1;',
+      after: '// oxlint-disable no-debugger\nexport const f = () => 1;',
+    },
+    {
+      change: 'addition',
+      before: 'export const f = () => 1;',
+      after: '// oxlint-disable no-console\nexport const f = () => 1;',
+    },
+    {
+      change: 'removal',
+      before: '// oxlint-disable no-console\nexport const f = () => 1;',
+      after: 'export const f = () => 1;',
+    },
+    {
+      change: 'movement',
+      before: '// oxlint-disable no-console\nexport const first = 1;\nexport const f = () => 1;',
+      after: 'export const first = 1;\n// oxlint-disable no-console\nexport const f = () => 1;',
+    },
+  ].flatMap((item) => [
+    { ...item, location: 'target' as const },
+    { ...item, location: 'dependency' as const },
+  ]);
+
   it.each(['interface', 'type'])('refines %s edits through aliased type reexports', async (kind) => {
     const report = await analyzeImpact({ root, targets, diff: typeDiff(kind), includeTypeOnly: true });
     expect(report.impacts.map((item) => item.target.id)).toEqual(['a']);
@@ -42,9 +73,15 @@ describe('type declarations and semantic no-ops (issues #22/#23)', () => {
     expect(report.symbolEvidence?.every((item) => item.precision === 'symbol')).toBe(true);
   });
 
-  it('refines type edits inside unchanged directive wrappers (issue #25)', async () => {
-    put('models.ts', '/* eslint-disable */\n// @ts-nocheck\nexport interface UserConfig {\n  name?: string;\n  enabled?: boolean;\n}\nexport interface Other { name: string }\n/* eslint-enable */\n');
-    const diff = 'diff --git a/models.ts b/models.ts\n--- a/models.ts\n+++ b/models.ts\n@@ -4,2 +4,3 @@\n   name?: string;\n+  enabled?: boolean;\n }\n';
+  it.each([
+    ['ESLint/TypeScript', '/* eslint-disable */\n// @ts-nocheck', '/* eslint-enable */'],
+    ['Oxlint', '// oxlint-disable no-console', '// oxlint-enable no-console'],
+  ])('refines type edits inside unchanged %s directive wrappers', async (_name, opening, closing) => {
+    const before = `${opening}\nexport interface UserConfig {\n  name?: string;\n}\nexport interface Other { name: string }\n${closing}`;
+    const after = before.replace('name?: string;', 'name?: string;\n  enabled?: boolean;');
+    put('models.ts', after + '\n');
+    const changedLine = opening.split('\n').length + 2;
+    const diff = `diff --git a/models.ts b/models.ts\n--- a/models.ts\n+++ b/models.ts\n@@ -${changedLine},2 +${changedLine},3 @@\n   name?: string;\n+  enabled?: boolean;\n }\n`;
     const report = await analyzeImpact({ root, targets, diff, includeTypeOnly: true });
     expect(report.impacts.map((item) => item.target.id)).toEqual(['a']);
     expect(report.symbolEvidence).toEqual([
@@ -52,6 +89,32 @@ describe('type declarations and semantic no-ops (issues #22/#23)', () => {
       expect.objectContaining({ precision: 'symbol', affected: false }),
     ]);
   });
+
+  it.each(oxlintDirectiveChanges)(
+    'conservatively propagates an Oxlint $change in a $location file',
+    async ({ before, after, location }) => {
+      const file = location === 'target' ? 'a.ts' : 'models.ts';
+      if (location === 'dependency') {
+        put('a.ts', 'import { f } from "./models"; export const page = () => f();');
+      }
+
+      const report = await analyzeImpact({
+        root,
+        targets: [targets[0]],
+        diff: change(before, after, file),
+      });
+
+      expect(report.changedFiles).toEqual([file]);
+      expect(report.impactedTargetCount).toBe(1);
+      expect(report.diagnostics.some((item) => item.code === 'semantic-noop')).toBe(false);
+      expect(report.symbolEvidence).toContainEqual(expect.objectContaining({
+        changedFile: file,
+        precision: 'file',
+        affected: true,
+        fallbackReason: location === 'target' ? 'target-file-changed' : 'directive-comment-changed',
+      }));
+    },
+  );
 
   it('reports documentation-link churn inside wrappers as a checked no-op (issue #25)', async () => {
     const before = '/* eslint-disable */\n// @ts-nocheck\n/**\n * [API docs](https://example.com/docs?version=1)\n */\nexport function f() { return "/user"; }\n/* eslint-enable */';

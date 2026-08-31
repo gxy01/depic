@@ -43,7 +43,7 @@ function declarationRange(item: ModuleItem): DeclarationRange {
 
 function ordinaryComment(text: string, raw: string): boolean {
   if (raw.startsWith('///') || /@|#__\w+__/.test(text)
-    || /\b(?:webpack\w*|vite\w*|rollup\w*|eslint\w*|jshint|jslint|global|globals|exported|prettier|biome|istanbul|c8|v8|coverage|sourceMappingURL|sourceURL|jsx\w*|flow|deno|bun|pure|pragma)\b/i.test(text)) return false;
+    || /\b(?:webpack\w*|vite\w*|rollup\w*|eslint\w*|oxlint\w*|jshint|jslint|global|globals|exported|prettier|biome|istanbul|c8|v8|coverage|sourceMappingURL|sourceURL|jsx\w*|flow|deno|bun|pure|pragma)\b/i.test(text)) return false;
   // Only inline HTTP(S) links with plain labels. Do not whitelist [] or other
   // markup wholesale; annotations, malformed links and unknown syntax stay protected.
   const prose = text.replace(/\[([\p{L}\p{N}\s.,:;/?=()'"-]+)\]\((https?:\/\/[^\s()[\]{}<>\\]+)\)/gu, (link, label: string, href: string) => {
@@ -101,7 +101,7 @@ function protectedComments(source: string, literals: LiteralRange[], declaration
         // Only gaps between top-level declarations have a proven attachment.
         // Inside expressions/bodies retain the strict code-offset fallback.
         const inGap = !next || index <= next.start;
-        const rangeDirective = /^(?:eslint-(?:disable|enable)|@ts-(?:nocheck|check))(?:\s|$)/.test(text);
+        const rangeDirective = /^(?:(?:eslint|oxlint)-(?:disable|enable)|@ts-(?:nocheck|check))(?:\s|$)/.test(text);
         const lines = (from: number, to: number) => bytes.subarray(from, to).toString('utf8').split(/\r\n|[\r\n]/).length - 1;
         const attachment = inGap ? {
           boundary: declarationIndex,

@@ -66,6 +66,9 @@ React 页面、路由、命令、任务或 workspace package 等候选目标；�
 从 `0.1.12` 起，重命名后的目标路径会沿 head 依赖图保守传播，不再被直接丢弃；
 `renamed-file` 诊断仍会指出需要基线图分析的旧路径消费者。删除文件仍只输出诊断。
 
+从 `0.1.13` 起，Oxlint 控制注释不会再被 `semantic-noop` 剔除；指令变化保守传播，
+未变化且 attachment 不变的 `oxlint-disable` / `oxlint-enable` 包装仍可安全进行符号/类型精化。
+
 需要主动忽略生成文件的变更时，可使用 `impact.excludeChangedFiles` 只过滤输入 diff，
 保留依赖图中的模块。报告会明确记录“未分析”，不能解释成“无影响”；用法见下方 CLI 文档
 （`0.1.6` 及更早版本不支持该选项）。

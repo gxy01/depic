@@ -44,6 +44,24 @@ describe('symbol-aware impact (issue #20)', () => {
     expect(graph.getTransitiveDependencies(join(root, 'page-b.ts'))).toContain(join(root, 'a.ts'));
   });
 
+  it('refines symbols inside unchanged Oxlint wrappers', async () => {
+    const before = '// oxlint-disable no-console\nexport function fetchA() { return "old"; }\nexport function fetchB() { return "b"; }\n// oxlint-enable no-console';
+    const after = before.replace('"old"', '"new"');
+    put('index.ts', 'export * from "./a";');
+    put('a.ts', after + '\n');
+    const diff = 'diff --git a/a.ts b/a.ts\n--- a/a.ts\n+++ b/a.ts\n@@ -2 +2 @@\n'
+      + '-export function fetchA() { return "old"; }\n'
+      + '+export function fetchA() { return "new"; }\n';
+
+    const report = await analyzeImpact({ root, targets, diff });
+
+    expect(report.impacts.map((item) => item.target.id)).toEqual(['a']);
+    expect(report.symbolEvidence).toEqual([
+      expect.objectContaining({ targetId: 'a', precision: 'symbol', affected: true, changedSymbols: ['fetchA'] }),
+      expect.objectContaining({ targetId: 'b', precision: 'symbol', affected: false, changedSymbols: ['fetchA'] }),
+    ]);
+  });
+
   it.each([
     ['import * as client from "./index";', 'client.fetchB()'],
     ['import * as client from "./index";', 'client["fetchB"]()'],

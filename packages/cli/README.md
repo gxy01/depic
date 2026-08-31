@@ -107,6 +107,14 @@ head checkout's dependency graph. Current consumers can therefore appear in
 path cannot be analyzed precisely without a baseline graph. Deleted files remain
 diagnostic-only, and rename destinations are not eligible for symbol/no-op pruning.
 
+### Oxlint control comments (0.1.13+)
+
+Oxlint directives are protected from checked no-op pruning. Changes between
+`oxlint-disable` and `oxlint-enable`, rule-list edits, additions, removals,
+reordering, and range movement remain conservative file-level impact. Unchanged
+range wrappers with stable attachment still allow supported symbol/type
+refinement inside the wrapped file.
+
 ### Ignore generated changes only
 
 Merge this optional setting into the existing config; keep your `impact.targets`:
@@ -148,7 +156,7 @@ the entire `.depic/` runtime artifact directory stays ignored. Review and commit
 the root `depic.config.json` when it should be shared with the team.
 
 For an ephemeral job that cannot modify the manifest, invoke a pinned version with
-`pnpm dlx @depic/cli@0.1.12 impact ...`.
+`pnpm dlx @depic/cli@0.1.13 impact ...`.
 
 ## License
 
