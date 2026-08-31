@@ -243,6 +243,16 @@ depic impact \
   `oxlint-disable-next-line` 等行敏感形式仍保留严格行位置。
 - target 自身与 dependency 文件均不得因 Oxlint 指令变化产生 `semantic-noop`。
 
+## 导出对象成员精化（0.1.14 / Issue #33）
+
+- 安全的 `export const object = { ... }` 会为受支持成员建立 `object.member` 限定符号；
+  静态点访问与字符串字面量键访问沿该限定符号传播。
+- 成员实现变更只命中读取该成员的目标；`changedSymbols` 与
+  `symbolEvidence.chain` 均保留限定成员名，文件级 `dependencyChains` 不变。
+- 只接受可静态证明的函数/简单字面量成员。动态键、动态访问、成员写入/删除、整体对象
+  逃逸、spread、getter/setter、不支持的值、重复成员及结构变化均保守回退。
+- 支持静态对象成员调用作为目标声明初始化；普通裸函数调用仍按既有顶层副作用规则回退。
+
 ## 非目标
 
 - 不在 Depic 内部识别路由、框架组件、页面或任务入口。

@@ -20,6 +20,21 @@ describe('symbol proof parser', () => {
     expect(parseSymbolModule(source, 'test.ts').declarations.get('foo')).toMatchObject({ startLine: 2, endLine: 2 });
   });
 
+  it('models safe exported object-literal members independently', () => {
+    const source = `const suffix = '!';
+export const client = {
+  fetchA: () => 'a' + suffix,
+  fetchB() { return 'b'; },
+  ['version']: 1,
+};`;
+    const module = parseSymbolModule(source, 'test.ts');
+    expect(module.fallbackReason).toBeUndefined();
+    expect(module.declarations.get('client')?.members).toEqual(['fetchA', 'fetchB', 'version']);
+    expect(module.declarations.get('client.fetchA')?.references).toContainEqual({ name: 'suffix', members: [] });
+    expect(module.declarations.get('client.fetchA')).toMatchObject({ startLine: 3, endLine: 3 });
+    expect(module.declarations.get('client.fetchB')).toMatchObject({ startLine: 4, endLine: 4 });
+  });
+
   it('collects interface/type declarations, annotation references and qualified type provenance', () => {
     const source = readFileSync(new URL('./fixtures/ts/symbol-contracts.ts', import.meta.url), 'utf8');
     const module = parseSymbolModule(source, 'contracts.ts', true);
@@ -50,6 +65,10 @@ describe('symbol proof parser', () => {
     'import "./side-effect";',
     'export const f = (key: string) => api[key];',
     'export const f = () => eval("code");',
+    'export const client = { ...other, fetch: () => 1 };',
+    'export const client = { get fetch() { return 1; } };',
+    'export const client = { [key]: () => 1 };',
+    'export const client = { fetch: effect() };',
   ])('marks unsupported or effectful syntax as a fallback: %s', (source) => {
     expect(parseSymbolModule(source, 'test.ts').fallbackReason).toBeDefined();
   });

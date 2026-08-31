@@ -104,6 +104,9 @@ src/
 - 建立两个 workspace package：变更 provider package 文件时，provider 与 consumer package 均被报告。
 - 多条路径、重复边和循环依赖：结果不重复、不会无限循环，最短链正确。
 - `EntryTarget.symbol` 不限制入口中的其他声明；对支持的声明变更精化 barrel 传播，不确定时保留文件级结果。
+- 导出对象字面量只修改 `fetchA` 时，静态读取 `fetchA` 的目标命中，静态读取
+  `fetchB` 的目标被剔除；限定符号证据必须可序列化。
+- 动态访问、对象逃逸、成员写入、spread 与 getter/setter 必须保持文件级结果。
 
 ### 3. 模块类型与解析能力
 

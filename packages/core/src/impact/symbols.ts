@@ -139,7 +139,18 @@ export class SymbolImpactAnalyzer {
       const local = (file: string, name: string, members: string[], trail: Set<string>): Origin[] => {
         tick();
         const module = this.module(file);
-        if (module.declarations.has(name)) return [{ file, name, chain: [{ file, symbol: name }] }];
+        const qualified = [name, ...members].join('.');
+        const declaration = module.declarations.get(name);
+        if (declaration?.members) {
+          if (members.length === 0) throw new SymbolFallback('object-escape');
+          if (module.declarations.has(qualified)) return [{ file, name: qualified, chain: [{ file, symbol: qualified }] }];
+          throw new SymbolFallback('unresolved-object-member');
+        }
+        if (module.declarations.has(qualified)) return [{ file, name: qualified, chain: [{ file, symbol: qualified }] }];
+        if (declaration) {
+          if (members.length > 0) throw new SymbolFallback('unsupported-member');
+          return [{ file, name, chain: [{ file, symbol: name }] }];
+        }
         const imported = module.imports.get(name);
         if (!imported) throw new SymbolFallback('unresolved-binding');
         return bind(file, imported, members, trail);

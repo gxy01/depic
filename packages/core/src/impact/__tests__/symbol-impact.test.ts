@@ -86,6 +86,56 @@ describe('symbol-aware impact (issue #20)', () => {
     expect(report.symbolEvidence?.[0].changedSymbols).toEqual(['helper']);
   });
 
+  it('refines changed exported object-literal members and static reads (issue #33)', async () => {
+    const before = "export const client = {\n  fetchA: () => 'old',\n  fetchB: () => 'b',\n};";
+    const after = before.replace("'old'", "'new'");
+    put('client.ts', after + '\n');
+    put('page-a.ts', "import { client } from './client'; export const page = client.fetchA();");
+    put('page-b.ts', "import { client } from './client'; export const page = client['fetchB']();");
+    const diff = "diff --git a/client.ts b/client.ts\n--- a/client.ts\n+++ b/client.ts\n@@ -2 +2 @@\n-  fetchA: () => 'old',\n+  fetchA: () => 'new',\n";
+
+    const report = await analyzeImpact({ root, targets, diff });
+
+    expect(report.impacts.map((item) => item.target.id)).toEqual(['a']);
+    expect(report.symbolEvidence).toEqual([
+      expect.objectContaining({ targetId: 'a', precision: 'symbol', affected: true, changedSymbols: ['client.fetchA'] }),
+      expect.objectContaining({ targetId: 'b', precision: 'symbol', affected: false, changedSymbols: ['client.fetchA'] }),
+    ]);
+    expect(report.symbolEvidence?.[0].chain).toContainEqual({ file: 'client.ts', symbol: 'client.fetchA' });
+  });
+
+  it.each([
+    ['dynamic-member', "import { client } from './client'; export const page = (key: string) => client[key]();"],
+    ['object-escape', "import { client } from './client'; export const page = () => consume(client);"],
+    ['member-mutation', "import { client } from './client'; export const page = () => { client.fetchB = () => 'changed'; return client.fetchB(); };"],
+  ])('keeps object-member analysis conservative for %s', async (reason, consumer) => {
+    const before = "export const client = {\n  fetchA: () => 'old',\n  fetchB: () => 'b',\n};";
+    put('client.ts', before.replace("'old'", "'new'") + '\n');
+    put('page-a.ts', "import { client } from './client'; export const page = client.fetchA();");
+    put('page-b.ts', consumer);
+    const diff = "diff --git a/client.ts b/client.ts\n--- a/client.ts\n+++ b/client.ts\n@@ -2 +2 @@\n-  fetchA: () => 'old',\n+  fetchA: () => 'new',\n";
+
+    const report = await analyzeImpact({ root, targets, diff });
+
+    expect(report.impactedTargetCount).toBe(2);
+    expect(report.symbolEvidence).toContainEqual(expect.objectContaining({ targetId: 'b', precision: 'file', fallbackReason: reason }));
+  });
+
+  it.each([
+    ['object-spread', "export const client = { ...base, fetchA: () => 'new', fetchB: () => 'b' };"],
+    ['object-accessor', "export const client = { get fetchA() { return 'new'; }, fetchB: () => 'b' };"],
+  ])('falls back for unsafe object declarations: %s', async (reason, after) => {
+    const before = after.replace("'new'", "'old'");
+    put('client.ts', after + '\n');
+    put('page-a.ts', "import { client } from './client'; export const page = client.fetchA;");
+    put('page-b.ts', "import { client } from './client'; export const page = client.fetchB();");
+
+    const report = await analyzeImpact({ root, targets, diff: change('client.ts', before, after) });
+
+    expect(report.impactedTargetCount).toBe(2);
+    expect(report.symbolEvidence?.every((item) => item.fallbackReason === reason)).toBe(true);
+  });
+
   it.each([
     ['dynamic-member', 'import { generatedClient as c } from "./client"; export const page = (key: string) => c[key]();'],
     ['namespace-escape', 'import { generatedClient as c } from "./client"; export const page = () => consume(c);'],

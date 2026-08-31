@@ -69,6 +69,10 @@ React 页面、路由、命令、任务或 workspace package 等候选目标；�
 从 `0.1.13` 起，Oxlint 控制注释不会再被 `semantic-noop` 剔除；指令变化保守传播，
 未变化且 attachment 不变的 `oxlint-disable` / `oxlint-enable` 包装仍可安全进行符号/类型精化。
 
+从 `0.1.14` 起，受支持的导出对象字面量可按静态成员精化。修改 `client.fetchA` 时，
+只读取 `client.fetchB` 的消费者可被安全剔除；动态访问、写入、对象逃逸、spread、
+getter/setter 和不确定结构仍保留文件级影响。
+
 需要主动忽略生成文件的变更时，可使用 `impact.excludeChangedFiles` 只过滤输入 diff，
 保留依赖图中的模块。报告会明确记录“未分析”，不能解释成“无影响”；用法见下方 CLI 文档
 （`0.1.6` 及更早版本不支持该选项）。
