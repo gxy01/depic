@@ -68,6 +68,12 @@ export async function runImpact(
     if (diagnostic.code === 'semantic-noop') {
       lines.push(`Semantic no-op files (checked AST equivalence): ${diagnostic.files?.join(', ')}`);
     }
+    if (diagnostic.code === 'non-source-file') {
+      lines.push(`Non-source changed files (outside analyzed graph): ${diagnostic.files?.join(', ')}`);
+    }
+    if (diagnostic.code === 'unmapped-file') {
+      lines.push(`Unmapped source/analysis files (warning): ${diagnostic.files?.join(', ')}`);
+    }
     if (diagnostic.code === 'chain-limit-reached' && diagnostic.chainLimit) {
       const detail = diagnostic.chainLimit;
       lines.push(`Truncated target ${detail.targetId}: returned ${detail.returnedChainCount} / at least ${detail.knownMinimumChainCount} chains (limits: per-target=${detail.maxChainsPerTarget}, total=${detail.maxTotalChains}).`);
@@ -76,7 +82,9 @@ export async function runImpact(
     }
   }
   if (report.diagnostics.length > 0) {
-    lines.push(`Diagnostics: ${report.diagnostics.length}`);
+    const warningCount = report.diagnostics.filter((item) => item.level === 'warning').length;
+    const infoCount = report.diagnostics.filter((item) => item.level === 'info').length;
+    lines.push(`Diagnostics: ${warningCount} warning(s), ${infoCount} info`);
   }
   if (report.symbolEvidence?.length) {
     const precise = report.symbolEvidence.filter((item) => item.precision === 'symbol');

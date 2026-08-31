@@ -135,6 +135,15 @@ depic impact . --diff change.diff --report report.json \
   --max-chains-per-target 40 --max-total-chains 20000
 ```
 
+### Non-source changes and graph gaps (0.1.16+)
+
+Compact output lists ordinary documentation/artifact changes as `Non-source
+changed files (outside analyzed graph)`. The JSON report records these as
+`non-source-file` with `level: "info"`; they remain visible but do not propagate
+through the source graph. Source-like or analysis-included paths missing from the
+graph remain `unmapped-file` warnings. Classification honors effective top-level
+`include`, `exclude`, and `extensions` settings. Global-impact patterns still win.
+
 ### Ignore generated changes only
 
 Merge this optional setting into the existing config; keep your `impact.targets`:
@@ -176,7 +185,7 @@ the entire `.depic/` runtime artifact directory stays ignored. Review and commit
 the root `depic.config.json` when it should be shared with the team.
 
 For an ephemeral job that cannot modify the manifest, invoke a pinned version with
-`pnpm dlx @depic/cli@0.1.15 impact ...`.
+`pnpm dlx @depic/cli@0.1.16 impact ...`.
 
 ## License
 

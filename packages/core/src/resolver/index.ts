@@ -7,7 +7,7 @@ import {
 import { resolve, dirname, extname, join, normalize } from 'node:path';
 import type { ResolveOptions, ResolvedTarget } from './types.js';
 
-const DEFAULT_EXTENSIONS = ['.ts', '.tsx', '.js', '.jsx'];
+export const DEFAULT_RESOLVE_EXTENSIONS = ['.ts', '.tsx', '.js', '.jsx'];
 
 interface TsconfigPaths {
   baseUrl: string;
@@ -27,7 +27,7 @@ export class Resolver {
 
   constructor(options: ResolveOptions) {
     this.root = options.root;
-    this.extensions = options.extensions ?? DEFAULT_EXTENSIONS;
+    this.extensions = options.extensions ?? DEFAULT_RESOLVE_EXTENSIONS;
 
     // 预加载显式指定的 tsconfig
     if (options.tsconfigPath) {

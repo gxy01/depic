@@ -1,8 +1,9 @@
-import { resolve, relative, sep } from 'node:path';
-import { analyze } from '../analyze.js';
+import { extname, resolve, relative, sep } from 'node:path';
+import { analyze, DEFAULT_ANALYZE_INCLUDE, matchesAnalyzeGlob } from '../analyze.js';
 import type { DependencyGraph } from '../graph/index.js';
 import type { Edge } from '../graph/types.js';
-import { loadDepicConfig } from '../config.js';
+import { applyDepicConfig, loadDepicConfig } from '../config.js';
+import { DEFAULT_RESOLVE_EXTENSIONS } from '../resolver/index.js';
 import { SymbolImpactAnalyzer } from './symbols.js';
 import type {
   ImpactDiagnostic,
@@ -74,7 +75,7 @@ export async function analyzeImpact(options: ImpactOptions): Promise<ImpactRepor
   }
 
   const normalizedTargets = normalizeTargets(suppliedTargets, root);
-  const graph = await analyze({
+  const analysisOptions = applyDepicConfig({
     root,
     include: options.include,
     exclude: options.exclude,
@@ -83,6 +84,7 @@ export async function analyzeImpact(options: ImpactOptions): Promise<ImpactRepor
     workspace: options.workspace,
     symbolLevel: true,
   });
+  const graph = await analyze(analysisOptions);
   const targets = validateTargets(normalizedTargets, graph, root, diagnostics);
   const includeTypeOnly = options.includeTypeOnly ?? impactConfig?.includeTypeOnly ?? false;
   const symbolAnalyzer = new SymbolImpactAnalyzer(root, graph.edges()
@@ -136,12 +138,7 @@ export async function analyzeImpact(options: ImpactOptions): Promise<ImpactRepor
       }
       changedFiles.push(file.path);
     } else {
-      diagnostics.push({
-        level: 'warning',
-        code: 'unmapped-file',
-        message: `Changed file ${file.path} is not present in the dependency graph.`,
-        files: [file.path],
-      });
+      diagnostics.push(classifyUnmappedFile(file.path, absolutePath, analysisOptions));
     }
   }
 
@@ -269,6 +266,43 @@ export async function analyzeImpact(options: ImpactOptions): Promise<ImpactRepor
     truncated: reportTruncated,
     symbolEvidence,
   };
+}
+
+function classifyUnmappedFile(
+  file: string,
+  absolutePath: string,
+  options: ReturnType<typeof applyDepicConfig>,
+): ImpactDiagnostic {
+  const includePatterns = options.include ?? DEFAULT_ANALYZE_INCLUDE;
+  const excluded = matchesAnalyzeGlob(absolutePath, options.exclude ?? []);
+  const expectedByDiscovery = !excluded && matchesAnalyzeGlob(absolutePath, includePatterns);
+  const configuredExtensions = options.extensions ?? DEFAULT_RESOLVE_EXTENSIONS;
+  const sourceExtensions = new Set([
+    ...DEFAULT_RESOLVE_EXTENSIONS,
+    ...configuredExtensions,
+  ].map(normalizeExtension));
+  const sourceLike = sourceExtensions.has(extname(file).toLowerCase());
+
+  if (expectedByDiscovery || sourceLike) {
+    return {
+      level: 'warning',
+      code: 'unmapped-file',
+      message: `Changed source or analysis-included file ${file} is not present in the dependency graph; check discovery configuration and parse/resolution failures.`,
+      files: [file],
+    };
+  }
+
+  return {
+    level: 'info',
+    code: 'non-source-file',
+    message: `Changed non-source file ${file} is outside the analyzed dependency graph; it was retained for visibility but does not propagate impact.`,
+    files: [file],
+  };
+}
+
+function normalizeExtension(extension: string): string {
+  const normalized = extension.toLowerCase();
+  return normalized.startsWith('.') ? normalized : `.${normalized}`;
 }
 
 function normalizeTargets(targets: ImpactTarget[], root: string): ValidTarget[] {

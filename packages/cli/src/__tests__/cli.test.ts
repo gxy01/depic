@@ -360,6 +360,38 @@ rename to new-helper.ts
     expect(JSON.parse(readFileSync(report, 'utf8'))).toMatchObject({ changedFiles: [], diagnostics: [{ code: 'semantic-noop', files: ['a.ts'] }] });
   });
 
+  it('keeps non-source changes visible and machine-distinct in CLI and JSON', async () => {
+    writeFileSync(join(tmpDir, 'depic.config.json'), JSON.stringify({
+      impact: { targets: [{ kind: 'entry', id: 'page', file: 'a.ts' }] },
+    }));
+    const diff = join(tmpDir, 'change.diff');
+    const report = join(tmpDir, 'impact.json');
+    writeFileSync(diff, 'diff --git a/README.md b/README.md\n--- a/README.md\n+++ b/README.md\n@@ -1 +1 @@\n-old\n+new\n');
+
+    const output = await runImpact(tmpDir, diff, undefined, report);
+
+    expect(output).toContain('Non-source changed files (outside analyzed graph): README.md');
+    expect(output).toContain('Diagnostics: 0 warning(s), 1 info');
+    expect(JSON.parse(readFileSync(report, 'utf8'))).toMatchObject({
+      changedFiles: [],
+      diagnostics: [{ code: 'non-source-file', level: 'info', files: ['README.md'] }],
+    });
+  });
+
+  it('summarizes unmapped source files as warnings separately from info', async () => {
+    writeFileSync(join(tmpDir, 'depic.config.json'), JSON.stringify({
+      impact: { targets: [{ kind: 'entry', id: 'page', file: 'a.ts' }] },
+    }));
+    const diff = join(tmpDir, 'change.diff');
+    const report = join(tmpDir, 'impact.json');
+    writeFileSync(diff, 'diff --git a/missing.ts b/missing.ts\n--- a/missing.ts\n+++ b/missing.ts\n@@ -1 +1 @@\n-old\n+new\n');
+
+    const output = await runImpact(tmpDir, diff, undefined, report);
+
+    expect(output).toContain('Unmapped source/analysis files (warning): missing.ts');
+    expect(output).toContain('Diagnostics: 1 warning(s), 0 info');
+  });
+
   it('impact reads type-symbol refinement from shared config', async () => {
     writeFileSync(join(tmpDir, 'models.ts'), 'export interface User { enabled?: boolean }\nexport interface Other { name: string }\n');
     writeFileSync(join(tmpDir, 'a.ts'), 'import type { User } from "./models"; export const page = (x: User) => x;');

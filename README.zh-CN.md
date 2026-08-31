@@ -77,6 +77,11 @@ getter/setter 和不确定结构仍保留文件级影响。
 一条已证明遗漏的链样本和可复制的恢复设置；CLI 可用 `--max-chains-per-target` 与
 `--max-total-chains` 做单次覆盖。
 
+从 `0.1.16` 起，配置源码图之外的变更路径会被分类但不会静默隐藏。预期进入分析或
+具有源码扩展名的 graph gap 继续产生 `unmapped-file` warning；普通文档和产物变更
+使用机器可区分的 info 级 `non-source-file` 诊断，并显示在紧凑摘要中。分类会采用
+最终生效的 `include`、`exclude` 和 `extensions` 配置。
+
 需要主动忽略生成文件的变更时，可使用 `impact.excludeChangedFiles` 只过滤输入 diff，
 保留依赖图中的模块。报告会明确记录“未分析”，不能解释成“无影响”；用法见下方 CLI 文档
 （`0.1.6` 及更早版本不支持该选项）。

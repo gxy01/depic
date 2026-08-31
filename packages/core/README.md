@@ -157,6 +157,13 @@ and copyable CLI/config recovery settings. A truncated `TargetImpact` also
 exposes `knownMinimumPathCount`. Report-wide exhaustion no longer silently drops
 a target once an omitted chain has been proven.
 
+From `0.1.16` (Issue #35), absent changed files are classified against the
+effective discovery configuration. Files matched by `include` (and not
+`exclude`), or recognized by default/configured source `extensions`, retain the
+prominent `unmapped-file` warning. Other documentation/artifact paths produce an
+informational `non-source-file` diagnostic. Both remain in the JSON report; the
+latter is not an implicit ignore or proof of no impact.
+
 `analyze()` and `analyzeImpact()` both load `depic.config.json`. The file accepts
 `include`, `exclude`, `tsconfigPath`, `extensions`, `symbolLevel`, `workspace`,
 and an `impact` object. Explicit API options override configured values.

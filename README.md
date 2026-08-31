@@ -92,6 +92,12 @@ counts, active limits, an omitted-chain sample, and copyable recovery settings.
 One-off CLI overrides are available through `--max-chains-per-target` and
 `--max-total-chains`.
 
+From `0.1.16`, changed paths outside the configured source graph are classified
+without being hidden. Expected/source-like graph gaps remain `unmapped-file`
+warnings, while ordinary documentation and artifact changes use the distinct
+informational `non-source-file` diagnostic and compact-summary section. Effective
+`include`, `exclude`, and `extensions` settings participate in classification.
+
 For explicitly ignored generated-file changes, `impact.excludeChangedFiles` filters
 the input diff without removing modules from the dependency graph. Exclusions are
 reported as **not analyzed**, not unaffected. See the CLI guide below (this option

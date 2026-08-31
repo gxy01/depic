@@ -118,6 +118,13 @@ depic impact . --diff change.diff --report report.json \
   --max-chains-per-target 40 --max-total-chains 20000
 ```
 
+### 非源码变更与 graph gap（0.1.16+）
+
+紧凑输出会把普通文档/产物列为 `Non-source changed files (outside analyzed graph)`。
+JSON 报告使用 `level: "info"` 的 `non-source-file`，文件仍然可见但不在源码图中传播。
+缺失的源码类路径或按配置本应进入分析的路径仍为 `unmapped-file` warning。分类采用
+最终生效的顶层 `include`、`exclude` 和 `extensions`，全局影响规则仍然优先。
+
 ### 只忽略生成文件的变更
 
 把下面的可选设置合并到已有配置，保留原来的 `impact.targets`：
@@ -155,7 +162,7 @@ pnpm exec depic impact . \
 运行产物目录保持忽略。需要团队共享时，请审查并提交根目录的
 `depic.config.json`。
 
-无法修改依赖清单的临时任务可使用 `pnpm dlx @depic/cli@0.1.15 impact ...`，并显式固定版本。
+无法修改依赖清单的临时任务可使用 `pnpm dlx @depic/cli@0.1.16 impact ...`，并显式固定版本。
 
 ## License
 
