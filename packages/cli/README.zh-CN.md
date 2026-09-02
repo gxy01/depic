@@ -33,7 +33,7 @@ depic analyze <root>       分析项目，输出 JSON（--dot 输出 Graphviz �
 depic cycles <root>        检测循环依赖
 depic dependents <file>    查看谁依赖了某个文件
 depic stats <root>         输出统计信息
-depic impact [root] --diff <path> [--targets <path>] --report <path>
+depic impact [root] --diff <path> [--targets <path>] --report <path> [--baseline-root <path>]
                             根据 unified diff 输出可能受影响的入口和 package
 depic web <root> [output]  生成交互式 HTML 可视化
 depic serve <root> [port]  启动本地 Web 服务器
@@ -125,6 +125,23 @@ JSON 报告使用 `level: "info"` 的 `non-source-file`，文件仍然可见但�
 缺失的源码类路径或按配置本应进入分析的路径仍为 `unmapped-file` warning。分类采用
 最终生效的顶层 `include`、`exclude` 和 `extensions`，全局影响规则仍然优先。
 
+### 删除文件与 baseline checkout（0.1.17+）
+
+纯删除在 head 图中没有节点。请把变更前源码放在独立目录，并显式传入：
+
+```bash
+git worktree add --detach /tmp/depic-baseline <base-revision>
+depic impact . --diff change.diff --report report.json \
+  --baseline-root /tmp/depic-baseline
+```
+
+Depic 会构建两张图，旧图证明的链标记 `analysisBasis: "baseline"`，与 head 证据合并时
+标记 `"mixed"`。baseline 不可用时，JSON 仍在 `changedFiles` 保留删除路径，把顶层
+`analysisStatus` 设为 `"incomplete"`，并在 `unresolvedChanges` 中提供
+`status: "unknown"`、reason 与 recovery action。CLI 会醒目输出
+`INCOMPLETE impact analysis`。分析本身成功时命令仍返回 0；CI 必须读取
+`analysisStatus`，不能仅凭退出码或空 `impacts` 判断覆盖完整。
+
 ### 只忽略生成文件的变更
 
 把下面的可选设置合并到已有配置，保留原来的 `impact.targets`：
@@ -162,7 +179,7 @@ pnpm exec depic impact . \
 运行产物目录保持忽略。需要团队共享时，请审查并提交根目录的
 `depic.config.json`。
 
-无法修改依赖清单的临时任务可使用 `pnpm dlx @depic/cli@0.1.16 impact ...`，并显式固定版本。
+无法修改依赖清单的临时任务可使用 `pnpm dlx @depic/cli@0.1.17 impact ...`，并显式固定版本。
 
 ## License
 

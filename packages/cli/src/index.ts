@@ -35,7 +35,7 @@ export async function runImpact(
   diffPath: string,
   targetsPath: string | undefined,
   reportPath: string,
-  limits: Pick<ImpactOptions, 'maxChainsPerTarget' | 'maxTotalChains'> = {},
+  overrides: Pick<ImpactOptions, 'baselineRoot' | 'maxChainsPerTarget' | 'maxTotalChains'> = {},
 ): Promise<string> {
   const diff = readFileSync(diffPath, 'utf-8');
   let targets: ImpactTarget[] | undefined;
@@ -51,7 +51,7 @@ export async function runImpact(
     root: rootDir,
     diff,
     targets,
-    ...limits,
+    ...overrides,
   });
   writeFileSync(reportPath, JSON.stringify(report, null, 2) + '\n', 'utf-8');
 
@@ -61,6 +61,15 @@ export async function runImpact(
       `- ${impact.target.id} (${impact.target.kind}; ${impact.impact}; ${impact.changedFiles.join(', ')})`,
     ),
   ];
+  if (report.analysisStatus === 'incomplete') {
+    lines.push('INCOMPLETE impact analysis: target coverage is not fully proven; inspect warning diagnostics.');
+    if (report.unresolvedChanges.length > 0) {
+      lines.push(`Unresolved changed files: ${report.unresolvedChanges.length}`);
+    }
+    for (const unresolved of report.unresolvedChanges) {
+      lines.push(`- ${unresolved.file}: ${unresolved.reason}; recovery=${unresolved.recovery.action}; rerun with ${unresolved.recovery.cli}`);
+    }
+  }
   for (const diagnostic of report.diagnostics) {
     if (diagnostic.code === 'excluded-changed-files') {
       lines.push(`Excluded changed files (not analyzed): ${diagnostic.files?.join(', ')}`);

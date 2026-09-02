@@ -37,7 +37,7 @@ depic analyze <root>       Analyze project, output JSON (--dot for Graphviz)
 depic cycles <root>        Detect circular dependencies
 depic dependents <file>    Show files that depend on <file>
 depic stats <root>         Show dependency statistics
-depic impact [root] --diff <path> [--targets <path>] --report <path>
+depic impact [root] --diff <path> [--targets <path>] --report <path> [--baseline-root <path>]
                             Report potentially impacted entries and packages
 depic web <root> [output]  Generate interactive HTML visualization
 depic serve <root> [port]  Start local web server with live visualization
@@ -144,6 +144,26 @@ through the source graph. Source-like or analysis-included paths missing from th
 graph remain `unmapped-file` warnings. Classification honors effective top-level
 `include`, `exclude`, and `extensions` settings. Global-impact patterns still win.
 
+### Deleted files and baseline checkouts (0.1.17+)
+
+A pure deletion has no node in the head graph. Materialize the pre-change tree in
+a separate directory and pass it explicitly:
+
+```bash
+git worktree add --detach /tmp/depic-baseline <base-revision>
+depic impact . --diff change.diff --report report.json \
+  --baseline-root /tmp/depic-baseline
+```
+
+Depic builds both graphs and reports baseline-proven chains with
+`analysisBasis: "baseline"` or `"mixed"`. Without a usable baseline, JSON keeps
+the deletion in `changedFiles`, sets top-level `analysisStatus: "incomplete"`,
+and adds `unresolvedChanges` with `status: "unknown"`, a reason, and recovery
+action. CLI output starts an `INCOMPLETE impact analysis` warning. The command
+still exits zero when analysis itself succeeds; CI consumers must inspect
+`analysisStatus` rather than equating exit zero or an empty `impacts` array with
+complete coverage.
+
 ### Ignore generated changes only
 
 Merge this optional setting into the existing config; keep your `impact.targets`:
@@ -185,7 +205,7 @@ the entire `.depic/` runtime artifact directory stays ignored. Review and commit
 the root `depic.config.json` when it should be shared with the team.
 
 For an ephemeral job that cannot modify the manifest, invoke a pinned version with
-`pnpm dlx @depic/cli@0.1.16 impact ...`.
+`pnpm dlx @depic/cli@0.1.17 impact ...`.
 
 ## License
 

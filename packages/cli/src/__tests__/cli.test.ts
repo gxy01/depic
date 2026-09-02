@@ -92,6 +92,7 @@ describe('CLI commands', () => {
     expect(stdout).toContain('impact.maxTotalChains');
     expect(stdout).toContain('--max-chains-per-target');
     expect(stdout).toContain('--max-total-chains');
+    expect(stdout).toContain('--baseline-root');
   });
 
   it('analyze --dot outputs DOT format', async () => {
@@ -225,6 +226,78 @@ index 1111111..2222222 100644
     await expect(runCli([
       'impact', tmpDir, '--diff', 'change.diff', '--report', 'report.json', flag, value,
     ])).rejects.toThrow(`${flag} requires a positive integer.`);
+  });
+
+  it('makes a deletion explicitly incomplete when no baseline is provided', async () => {
+    const diffFile = join(tmpDir, 'delete.diff');
+    const reportFile = join(tmpDir, 'impact.json');
+    writeFileSync(join(tmpDir, 'a.ts'), 'import { value } from "./removed"; export const page = value;');
+    writeFileSync(join(tmpDir, 'depic.config.json'), JSON.stringify({
+      impact: { targets: [{ kind: 'entry', id: 'page', file: 'a.ts' }] },
+    }));
+    writeFileSync(diffFile, 'diff --git a/removed.ts b/removed.ts\ndeleted file mode 100644\n--- a/removed.ts\n+++ /dev/null\n@@ -1 +0,0 @@\n-export const value = 1;\n');
+
+    let output = '';
+    const exitCode = await runCli([
+      'impact', tmpDir,
+      '--diff', diffFile,
+      '--report', reportFile,
+    ], (value) => { output += value; });
+    const report = JSON.parse(readFileSync(reportFile, 'utf8'));
+
+    expect(exitCode).toBe(0);
+    expect(output).toContain('INCOMPLETE impact analysis: target coverage is not fully proven');
+    expect(output).toContain('Unresolved changed files: 1');
+    expect(output).toContain('removed.ts: baseline-required; recovery=provide-baseline-root; rerun with --baseline-root /path/to/baseline-checkout');
+    expect(report).toMatchObject({
+      analysisStatus: 'incomplete',
+      changedFiles: ['removed.ts'],
+      unresolvedChanges: [{ file: 'removed.ts', status: 'unknown' }],
+    });
+  });
+
+  it('accepts --baseline-root and reports baseline-proven deletion impact', async () => {
+    const baselineRoot = mkdtempSync(join(tmpdir(), 'depic-cli-baseline-'));
+    try {
+      const diffFile = join(tmpDir, 'delete.diff');
+      const reportFile = join(tmpDir, 'impact.json');
+      writeFileSync(join(tmpDir, 'a.ts'), 'import { value } from "./removed"; export const page = value;');
+      writeFileSync(join(tmpDir, 'depic.config.json'), JSON.stringify({
+        impact: { targets: [{ kind: 'entry', id: 'page', file: 'a.ts' }] },
+      }));
+      writeFileSync(join(baselineRoot, 'a.ts'), 'import { value } from "./removed"; export const page = value;');
+      writeFileSync(join(baselineRoot, 'removed.ts'), 'export const value = 1;');
+      writeFileSync(diffFile, 'diff --git a/removed.ts b/removed.ts\ndeleted file mode 100644\n--- a/removed.ts\n+++ /dev/null\n@@ -1 +0,0 @@\n-export const value = 1;\n');
+      let stdout = '';
+
+      const exitCode = await runCli([
+        'impact', tmpDir,
+        '--diff', diffFile,
+        '--report', reportFile,
+        '--baseline-root', baselineRoot,
+      ], (value) => { stdout += value; });
+
+      expect(exitCode).toBe(0);
+      expect(stdout).toContain('Impacted targets: 1 / 1');
+      expect(stdout).not.toContain('INCOMPLETE impact analysis');
+      expect(JSON.parse(readFileSync(reportFile, 'utf8'))).toMatchObject({
+        analysisStatus: 'complete',
+        unresolvedChanges: [],
+        impacts: [{
+          target: { id: 'page' },
+          changedFiles: ['removed.ts'],
+          analysisBasis: 'baseline',
+        }],
+      });
+    } finally {
+      rmSync(baselineRoot, { recursive: true, force: true });
+    }
+  });
+
+  it('rejects --baseline-root without a path', async () => {
+    await expect(runCli([
+      'impact', tmpDir, '--diff', 'change.diff', '--report', 'report.json', '--baseline-root',
+    ])).rejects.toThrow('--baseline-root requires a path.');
   });
 
   it('impact reads targets from the shared depic config by default', async () => {

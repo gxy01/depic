@@ -92,6 +92,7 @@ describe('unmapped changed-file classification (issue #35)', () => {
 
     expect(report.changedFiles).toEqual([]);
     expect(report.impacts).toEqual([]);
+    expect(report.analysisStatus).toBe(level === 'warning' ? 'incomplete' : 'complete');
     expect(report.diagnostics).toEqual([expect.objectContaining({ code, level, files: [file] })]);
   });
 

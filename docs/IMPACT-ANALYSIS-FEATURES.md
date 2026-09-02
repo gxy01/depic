@@ -90,6 +90,8 @@ type ImpactTarget = EntryTarget | PackageTarget;
 interface ImpactOptions extends AnalyzeOptions {
   /** 标准 unified diff 文本。 */
   diff: string;
+  /** 可选的变更前 checkout，用于分析删除文件。 */
+  baselineRoot?: string;
   /** 可选覆盖 depic.config.json 中的影响目标。 */
   targets?: ImpactTarget[];
   /** 命中即触发全局影响的额外 glob 模式。 */
@@ -140,15 +142,27 @@ interface TargetImpact {
   dependencyChains: string[][];
   pathCount: number;
   truncated: boolean;
+  analysisBasis?: 'head' | 'baseline' | 'mixed';
+}
+
+interface ImpactUnresolvedChange {
+  kind: 'deleted-file';
+  file: string;
+  status: 'unknown';
+  reason: string;
+  targetIds?: string[];
+  recovery: { action: string; cli: string };
 }
 
 interface ImpactReport {
+  analysisStatus: 'complete' | 'incomplete';
   totalTargetCount: number;
   impactedTargetCount: number;
   changedFiles: string[];
   impacts: TargetImpact[];
   diagnostics: ImpactDiagnostic[];
   truncated: boolean;
+  unresolvedChanges: ImpactUnresolvedChange[];
 }
 ```
 
@@ -273,6 +287,22 @@ depic impact \
 - 其余预期不入源码图的文档/产物产生 info 级 `non-source-file`。该诊断继续出现在 JSON
   和 CLI 独立摘要中，不是自动 ignore，也不表示“无影响”。
 - CLI 的最终诊断摘要分别统计 warning 和 info，避免把普通非源码信息显示为 warning。
+
+## 删除文件的 baseline 分析（0.1.17 / Issue #40）
+
+- `baselineRoot` / CLI `--baseline-root` 指向已物化的变更前 checkout；Depic 不自行执行
+  Git checkout，也不把运行时 baseline 路径写入共享配置。
+- 删除路径保留在 report `changedFiles`。提供 baseline 时，使用旧图入口/package 和反向
+  依赖生成解释链；`TargetImpact.analysisBasis` 区分 `baseline`、`head` 和 `mixed`。
+- 未提供 baseline 或旧图无法给出证据时，顶层 `analysisStatus` 为 `incomplete`，
+  `unresolvedChanges` 保留 `status: unknown`、稳定 reason、recovery action 和可复用 CLI 参数。
+- reason 区分 `baseline-required`、`baseline-root-unavailable`、
+  `baseline-analysis-failed`、`baseline-file-missing`、`baseline-parse-failed` 与
+  `baseline-file-unmapped`，以及 `baseline-targets-unmapped`。文件/目标存在但未进入旧图时
+  仍视为 unknown，不能把没有找到依赖链解释为“无影响”。
+- 命中全局影响规则的删除已保守覆盖全部有效目标，无需 baseline，状态保持 `complete`。
+- 成功生成 incomplete 报告时 CLI 仍返回 0，并醒目输出 `INCOMPLETE impact analysis`；
+  CI 必须读取 `analysisStatus`，不能把退出码 0 或空 `impacts` 当作完整的零影响证明。
 
 ## 非目标
 
