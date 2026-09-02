@@ -19,6 +19,8 @@ export type ImpactTarget = EntryTarget | PackageTarget;
 
 export interface ImpactOptions extends AnalyzeOptions {
   diff: string;
+  /** Optional checkout of the pre-change tree, used to resolve deleted files. */
+  baselineRoot?: string;
   targets?: ImpactTarget[];
   globalImpactPatterns?: string[];
   /** Exclude matching diff paths only; graph nodes and edges remain available. */
@@ -29,6 +31,32 @@ export interface ImpactOptions extends AnalyzeOptions {
 }
 
 export type ImpactKind = 'direct' | 'transitive' | 'global';
+
+export interface ImpactUnresolvedChange {
+  kind: 'deleted-file';
+  file: string;
+  status: 'unknown';
+  reason:
+    | 'baseline-required'
+    | 'baseline-root-unavailable'
+    | 'baseline-analysis-failed'
+    | 'baseline-file-missing'
+    | 'baseline-parse-failed'
+    | 'baseline-file-unmapped'
+    | 'baseline-targets-unmapped';
+  targetIds?: string[];
+  recovery: {
+    action:
+      | 'provide-baseline-root'
+      | 'fix-baseline-root'
+      | 'fix-baseline-analysis'
+      | 'restore-baseline-file'
+      | 'fix-baseline-parse'
+      | 'include-baseline-file'
+      | 'fix-baseline-targets';
+    cli: string;
+  };
+}
 
 export interface ImpactChainLimitDetails {
   targetId: string;
@@ -72,15 +100,20 @@ export interface TargetImpact {
   /** Present when truncated; the actual path count may be higher. */
   knownMinimumPathCount?: number;
   truncated: boolean;
+  /** Graph checkout(s) that proved the returned impact. */
+  analysisBasis?: 'head' | 'baseline' | 'mixed';
 }
 
 export interface ImpactReport {
+  /** Incomplete means at least one changed file could not be mapped to target impact safely. */
+  analysisStatus: 'complete' | 'incomplete';
   totalTargetCount: number;
   impactedTargetCount: number;
   changedFiles: string[];
   impacts: TargetImpact[];
   diagnostics: ImpactDiagnostic[];
   truncated: boolean;
+  unresolvedChanges: ImpactUnresolvedChange[];
   /** Refinement decisions, including targets proven unrelated to a changed symbol. */
   symbolEvidence?: ImpactSymbolEvidence[];
 }

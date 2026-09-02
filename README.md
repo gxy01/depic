@@ -98,6 +98,13 @@ warnings, while ordinary documentation and artifact changes use the distinct
 informational `non-source-file` diagnostic and compact-summary section. Effective
 `include`, `exclude`, and `extensions` settings participate in classification.
 
+From `0.1.17`, `impact --baseline-root <path>` builds the pre-change graph needed
+to propagate deleted source files to entries and packages. Without usable
+baseline evidence, the report keeps the deleted path in `changedFiles`, sets
+top-level `analysisStatus` to `incomplete`, and records a structured unknown in
+`unresolvedChanges`; a successful CLI run still exits zero, so CI must inspect
+the report status instead of treating an empty impact list as authoritative.
+
 For explicitly ignored generated-file changes, `impact.excludeChangedFiles` filters
 the input diff without removing modules from the dependency graph. Exclusions are
 reported as **not analyzed**, not unaffected. See the CLI guide below (this option

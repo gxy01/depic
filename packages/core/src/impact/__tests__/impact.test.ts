@@ -89,6 +89,7 @@ describe('analyzeImpact', () => {
     });
 
     expect(report.changedFiles).toEqual(['src/utils/new-helper.ts']);
+    expect(report.analysisStatus).toBe('incomplete');
     expect(report.impacts).toEqual([expect.objectContaining({
       target: expect.objectContaining({ id: '/renamed' }),
       impact: 'direct',

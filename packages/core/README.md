@@ -164,6 +164,14 @@ prominent `unmapped-file` warning. Other documentation/artifact paths produce an
 informational `non-source-file` diagnostic. Both remain in the JSON report; the
 latter is not an implicit ignore or proof of no impact.
 
+From `0.1.17` (Issue #40), `ImpactOptions.baselineRoot` points to a pre-change
+checkout. Depic builds a second graph and uses its reverse dependencies for
+deleted paths, including targets that exist only in the baseline. Baseline-proven
+impacts expose `analysisBasis: "baseline"` (or `"mixed"` with head evidence).
+Without usable evidence, `analysisStatus` is `"incomplete"`, the deleted path
+remains in `changedFiles`, and `unresolvedChanges` provides a stable reason and
+recovery action. The baseline path is runtime input, not shared config.
+
 `analyze()` and `analyzeImpact()` both load `depic.config.json`. The file accepts
 `include`, `exclude`, `tsconfigPath`, `extensions`, `symbolLevel`, `workspace`,
 and an `impact` object. Explicit API options override configured values.

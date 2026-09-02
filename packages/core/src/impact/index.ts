@@ -1,9 +1,11 @@
 import { extname, resolve, relative, sep } from 'node:path';
+import { existsSync, readFileSync, statSync } from 'node:fs';
 import { analyze, DEFAULT_ANALYZE_INCLUDE, matchesAnalyzeGlob } from '../analyze.js';
 import type { DependencyGraph } from '../graph/index.js';
 import type { Edge } from '../graph/types.js';
 import { applyDepicConfig, loadDepicConfig } from '../config.js';
 import { DEFAULT_RESOLVE_EXTENSIONS } from '../resolver/index.js';
+import { parseFile } from '../parser/index.js';
 import { SymbolImpactAnalyzer } from './symbols.js';
 import type {
   ImpactDiagnostic,
@@ -12,6 +14,7 @@ import type {
   ImpactTarget,
   TargetImpact,
   ImpactSymbolEvidence,
+  ImpactUnresolvedChange,
 } from './types.js';
 
 const DEFAULT_MAX_CHAINS_PER_TARGET = 20;
@@ -38,7 +41,25 @@ interface DiffFile {
 interface ValidTarget {
   target: ImpactTarget;
   entryFiles: string[];
+  baselineEntryFiles: string[];
 }
+
+interface ImpactSearchResult {
+  chains: string[][];
+  truncated: boolean;
+  knownMinimum: number;
+  omittedWitness?: string[];
+  limitCause?: 'per-target' | 'total' | 'both';
+}
+
+interface ImpactSearchEvidence {
+  basis: 'head' | 'baseline';
+  graph: DependencyGraph;
+  root: string;
+  result: ImpactSearchResult;
+}
+
+type BaselineFailure = 'baseline-root-unavailable' | 'baseline-analysis-failed';
 
 /**
  * 根据 unified diff 和上游提供的影响目标，计算可能受影响的入口或 package。
@@ -85,7 +106,36 @@ export async function analyzeImpact(options: ImpactOptions): Promise<ImpactRepor
     symbolLevel: true,
   });
   const graph = await analyze(analysisOptions);
-  const targets = validateTargets(normalizedTargets, graph, root, diagnostics);
+  const baselineRoot = options.baselineRoot ? resolve(root, options.baselineRoot) : undefined;
+  let baselineGraph: DependencyGraph | undefined;
+  let baselineFailure: BaselineFailure | undefined;
+  if (baselineRoot) {
+    if (!isDirectory(baselineRoot)) {
+      baselineFailure = 'baseline-root-unavailable';
+    } else {
+      try {
+        baselineGraph = await analyze({
+          root: baselineRoot,
+          include: options.include,
+          exclude: options.exclude,
+          tsconfigPath: options.tsconfigPath,
+          extensions: options.extensions,
+          workspace: options.workspace,
+          symbolLevel: true,
+        });
+      } catch {
+        baselineFailure = 'baseline-analysis-failed';
+      }
+    }
+  }
+  const targets = validateTargets(
+    normalizedTargets,
+    graph,
+    root,
+    diagnostics,
+    baselineGraph,
+    baselineRoot,
+  );
   const includeTypeOnly = options.includeTypeOnly ?? impactConfig?.includeTypeOnly ?? false;
   const symbolAnalyzer = new SymbolImpactAnalyzer(root, graph.edges()
     .filter((edge) => graph.getFileNode(edge.target))
@@ -96,7 +146,6 @@ export async function analyzeImpact(options: ImpactOptions): Promise<ImpactRepor
   }
 
   const currentDiffFiles = diffFiles
-    .filter((file) => file.status === 'added' || file.status === 'modified' || file.status === 'renamed')
     .map((file) => file.path);
   const globalPatterns = [
     ...DEFAULT_GLOBAL_IMPACT_PATTERNS,
@@ -107,15 +156,54 @@ export async function analyzeImpact(options: ImpactOptions): Promise<ImpactRepor
     .sort();
 
   const changedFiles: string[] = [];
+  const reportChangedFiles: string[] = [];
+  const baselineChangedFiles = new Set<string>();
+  const unresolvedChanges: ImpactUnresolvedChange[] = [];
   const semanticNoops = new Set<string>();
   for (const file of diffFiles) {
     if (file.status === 'deleted') {
-      diagnostics.push({
-        level: 'warning',
-        code: 'deleted-file',
-        message: `Deleted file ${file.path} requires a baseline dependency graph for precise impact analysis.`,
-        files: [file.path],
-      });
+      reportChangedFiles.push(file.path);
+      if (globalChangedFiles.length > 0) {
+        diagnostics.push({
+          level: 'info',
+          code: 'deleted-file',
+          message: `Deleted file ${file.path} is covered by global impact; baseline dependency data is not required for target coverage.`,
+          files: [file.path],
+        });
+        continue;
+      }
+      const baselinePath = baselineRoot ? toAbsolutePath(baselineRoot, file.path) : undefined;
+      const baselineFileMapped = Boolean(
+        baselineGraph && baselinePath && baselineGraph.getFileNode(baselinePath),
+      );
+      const unmappedBaselineTargetIds = targets
+        .filter((target) => target.baselineEntryFiles.length === 0)
+        .map((target) => target.target.id);
+      if (baselinePath && baselineFileMapped) baselineChangedFiles.add(baselinePath);
+      if (baselineFileMapped && unmappedBaselineTargetIds.length === 0) {
+        diagnostics.push({
+          level: 'info',
+          code: 'deleted-file',
+          message: `Deleted file ${file.path} is analyzed using baseline reverse dependencies.`,
+          files: [file.path],
+        });
+      } else {
+        const unresolved = classifyUnresolvedDeletion(
+          file.path,
+          options.baselineRoot,
+          baselineRoot,
+          baselineFailure,
+          baselineFileMapped,
+          unmappedBaselineTargetIds,
+        );
+        diagnostics.push({
+          level: 'warning',
+          code: 'deleted-file',
+          message: `Deleted file ${file.path} has unresolved impact (${unresolved.reason}); ${unresolved.recovery.action}, then rerun with ${unresolved.recovery.cli}.`,
+          files: [file.path],
+        });
+        unresolvedChanges.push(unresolved);
+      }
       continue;
     }
     if (file.status === 'renamed') {
@@ -128,6 +216,7 @@ export async function analyzeImpact(options: ImpactOptions): Promise<ImpactRepor
     }
     if (globalChangedFiles.includes(file.path)) {
       changedFiles.push(file.path);
+      reportChangedFiles.push(file.path);
       continue;
     }
     const absolutePath = toAbsolutePath(root, file.path);
@@ -137,6 +226,7 @@ export async function analyzeImpact(options: ImpactOptions): Promise<ImpactRepor
         continue;
       }
       changedFiles.push(file.path);
+      reportChangedFiles.push(file.path);
     } else {
       diagnostics.push(classifyUnmappedFile(file.path, absolutePath, analysisOptions));
     }
@@ -150,11 +240,14 @@ export async function analyzeImpact(options: ImpactOptions): Promise<ImpactRepor
   }
 
   const stableChangedFiles = [...new Set(changedFiles)].sort();
+  const stableReportChangedFiles = [...new Set(reportChangedFiles)].sort();
+  const stableUnresolvedChanges = unresolvedChanges.sort((a, b) => a.file.localeCompare(b.file));
   if (globalChangedFiles.length > 0) {
     return {
+      analysisStatus: hasInvalidTargets(diagnostics) ? 'incomplete' : 'complete',
       totalTargetCount: targets.length,
       impactedTargetCount: targets.length,
-      changedFiles: stableChangedFiles,
+      changedFiles: stableReportChangedFiles,
       impacts: targets.map(({ target }) => ({
         target,
         impact: 'global',
@@ -165,6 +258,7 @@ export async function analyzeImpact(options: ImpactOptions): Promise<ImpactRepor
       })),
       diagnostics,
       truncated: false,
+      unresolvedChanges: [],
     };
   }
 
@@ -186,6 +280,8 @@ export async function analyzeImpact(options: ImpactOptions): Promise<ImpactRepor
   const symbolEvidence: ImpactSymbolEvidence[] = [];
 
   for (const target of targets) {
+    const usedTotalChains = totalChainCount;
+    const searches: ImpactSearchEvidence[] = [];
     const targetChanges = new Set(changedAbsoluteFiles);
     for (const file of stableChangedFiles) {
       const absolute = toAbsolutePath(root, file);
@@ -195,8 +291,7 @@ export async function analyzeImpact(options: ImpactOptions): Promise<ImpactRepor
         if (!evidence.affected) targetChanges.delete(absolute);
       }
     }
-    const usedTotalChains = totalChainCount;
-    const result = findTargetImpact(
+    const headResult = findTargetImpact(
       target,
       graph,
       targetChanges,
@@ -204,68 +299,130 @@ export async function analyzeImpact(options: ImpactOptions): Promise<ImpactRepor
       maxChainsPerTarget,
       maxTotalChains - totalChainCount,
     );
-    totalChainCount += result.chains.length;
-    reportTruncated ||= result.truncated;
+    searches.push({ basis: 'head', graph, root, result: headResult });
 
-    if (result.truncated && result.omittedWitness && result.limitCause) {
-      const suggestedPerTarget = ['per-target', 'both'].includes(result.limitCause)
-        ? Math.max(maxChainsPerTarget * 2, result.knownMinimum)
+    if (baselineGraph && baselineRoot && baselineChangedFiles.size > 0 && !headResult.truncated) {
+      const baselineResult = findTargetImpact(
+        { ...target, entryFiles: target.baselineEntryFiles },
+        baselineGraph,
+        baselineChangedFiles,
+        includeTypeOnly,
+        maxChainsPerTarget - headResult.chains.length,
+        maxTotalChains - totalChainCount - headResult.chains.length,
+      );
+      searches.push({
+        basis: 'baseline',
+        graph: baselineGraph,
+        root: baselineRoot,
+        result: baselineResult,
+      });
+    }
+
+    const returnedEvidence = searches.flatMap((search) => search.result.chains.map((chain) => ({
+      basis: search.basis,
+      graph: search.graph,
+      root: search.root,
+      chain,
+    })));
+    totalChainCount += returnedEvidence.length;
+    const truncatedSearch = searches.find((search) =>
+      search.result.truncated && search.result.omittedWitness && search.result.limitCause,
+    );
+    const resultTruncated = Boolean(truncatedSearch);
+    const resultKnownMinimum = returnedEvidence.length + (resultTruncated ? 1 : 0);
+    reportTruncated ||= resultTruncated;
+
+    if (truncatedSearch?.result.omittedWitness && truncatedSearch.result.limitCause) {
+      const suggestedPerTarget = ['per-target', 'both'].includes(truncatedSearch.result.limitCause)
+        ? Math.max(maxChainsPerTarget * 2, resultKnownMinimum)
         : maxChainsPerTarget;
-      const suggestedTotal = ['total', 'both'].includes(result.limitCause)
-        ? Math.max(maxTotalChains * 2, usedTotalChains + result.knownMinimum)
+      const suggestedTotal = ['total', 'both'].includes(truncatedSearch.result.limitCause)
+        ? Math.max(maxTotalChains * 2, usedTotalChains + resultKnownMinimum)
         : maxTotalChains;
       const cli = `--max-chains-per-target ${suggestedPerTarget} --max-total-chains ${suggestedTotal}`;
       const config = JSON.stringify({ impact: {
         maxChainsPerTarget: suggestedPerTarget,
         maxTotalChains: suggestedTotal,
       } });
-      const omittedDependencyChain = result.omittedWitness.map((file) => relativePath(root, file));
+      const omittedDependencyChain = truncatedSearch.result.omittedWitness
+        .map((file) => relativePath(truncatedSearch.root, file));
       diagnostics.push({
         level: 'warning',
         code: 'chain-limit-reached',
-        message: `Target "${target.target.id}" returned ${result.chains.length} of at least ${result.knownMinimum} dependency chains. Active limits: maxChainsPerTarget=${maxChainsPerTarget}, maxTotalChains=${maxTotalChains}. Rerun with ${cli} or set ${config}.`,
+        message: `Target "${target.target.id}" returned ${returnedEvidence.length} of at least ${resultKnownMinimum} dependency chains. Active limits: maxChainsPerTarget=${maxChainsPerTarget}, maxTotalChains=${maxTotalChains}. Rerun with ${cli} or set ${config}.`,
         files: [omittedDependencyChain[omittedDependencyChain.length - 1]],
         chainLimit: {
           targetId: target.target.id,
-          returnedChainCount: result.chains.length,
-          knownMinimumChainCount: result.knownMinimum,
+          returnedChainCount: returnedEvidence.length,
+          knownMinimumChainCount: resultKnownMinimum,
           maxChainsPerTarget,
           maxTotalChains,
-          limitCause: result.limitCause,
+          limitCause: truncatedSearch.result.limitCause,
           omittedDependencyChain,
           recovery: { cli, config },
         },
       });
     }
 
-    const evidenceChains = result.chains.length > 0
-      ? [...result.chains, ...(result.omittedWitness ? [result.omittedWitness] : [])]
-      : result.omittedWitness ? [result.omittedWitness] : [];
+    const omittedEvidence = truncatedSearch?.result.omittedWitness ? [{
+      basis: truncatedSearch.basis,
+      graph: truncatedSearch.graph,
+      root: truncatedSearch.root,
+      chain: truncatedSearch.result.omittedWitness,
+    }] : [];
+    const evidenceChains = [...returnedEvidence, ...omittedEvidence];
     if (evidenceChains.length === 0) continue;
     const changedForTarget = [...new Set(
-      evidenceChains.map((chain) => relativePath(root, chain[chain.length - 1])),
+      evidenceChains.map((item) => relativePath(item.root, item.chain[item.chain.length - 1])),
     )].sort();
-    const isDirect = evidenceChains.some((chain) => isDirectImpactChain(chain, graph));
+    const isDirect = evidenceChains.some((item) => isDirectImpactChain(item.chain, item.graph));
+    const dependencyChains = returnedEvidence
+      .map((item) => item.chain.map((file) => relativePath(item.root, file)))
+      .sort(compareChains);
+    const bases = new Set(evidenceChains.map((item) => item.basis));
     impacts.push({
       target: target.target,
       impact: isDirect ? 'direct' : 'transitive',
       changedFiles: changedForTarget,
-      dependencyChains: result.chains.map((chain) => chain.map((file) => relativePath(root, file))),
-      pathCount: result.chains.length,
-      ...(result.truncated ? { knownMinimumPathCount: result.knownMinimum } : {}),
-      truncated: result.truncated,
+      dependencyChains,
+      pathCount: returnedEvidence.length,
+      ...(resultTruncated ? { knownMinimumPathCount: resultKnownMinimum } : {}),
+      truncated: resultTruncated,
+      analysisBasis: bases.size > 1 ? 'mixed' : bases.has('baseline') ? 'baseline' : 'head',
     });
   }
 
   return {
+    analysisStatus: hasIncompleteCoverage(diagnostics) ? 'incomplete' : 'complete',
     totalTargetCount: targets.length,
     impactedTargetCount: impacts.length,
-    changedFiles: stableChangedFiles,
+    changedFiles: stableReportChangedFiles,
     impacts: impacts.sort((a, b) => a.target.id.localeCompare(b.target.id)),
     diagnostics,
     truncated: reportTruncated,
+    unresolvedChanges: stableUnresolvedChanges,
     symbolEvidence,
   };
+}
+
+function hasInvalidTargets(diagnostics: ImpactDiagnostic[]): boolean {
+  return diagnostics.some((item) =>
+    item.code === 'empty-targets'
+    || item.code === 'missing-entry-file'
+    || item.code === 'missing-package',
+  );
+}
+
+function hasIncompleteCoverage(diagnostics: ImpactDiagnostic[]): boolean {
+  return diagnostics.some((item) => item.level === 'warning' && (
+    item.code === 'empty-targets'
+    || item.code === 'missing-entry-file'
+    || item.code === 'missing-package'
+    || item.code === 'deleted-file'
+    || item.code === 'renamed-file'
+    || item.code === 'unmapped-file'
+    || item.code === 'excluded-changed-files'
+  ));
 }
 
 function classifyUnmappedFile(
@@ -305,6 +462,66 @@ function normalizeExtension(extension: string): string {
   return normalized.startsWith('.') ? normalized : `.${normalized}`;
 }
 
+function classifyUnresolvedDeletion(
+  file: string,
+  baselineRootOption: string | undefined,
+  baselineRoot: string | undefined,
+  baselineFailure: BaselineFailure | undefined,
+  baselineFileMapped: boolean,
+  unmappedBaselineTargetIds: string[],
+): ImpactUnresolvedChange {
+  let reason: ImpactUnresolvedChange['reason'];
+  let action: ImpactUnresolvedChange['recovery']['action'];
+
+  if (!baselineRootOption) {
+    reason = 'baseline-required';
+    action = 'provide-baseline-root';
+  } else if (baselineFailure === 'baseline-root-unavailable') {
+    reason = baselineFailure;
+    action = 'fix-baseline-root';
+  } else if (baselineFailure === 'baseline-analysis-failed') {
+    reason = baselineFailure;
+    action = 'fix-baseline-analysis';
+  } else {
+    const baselinePath = baselineRoot ? toAbsolutePath(baselineRoot, file) : undefined;
+    if (!baselinePath || !existsSync(baselinePath)) {
+      reason = 'baseline-file-missing';
+      action = 'restore-baseline-file';
+    } else {
+      try {
+        parseFile(readFileSync(baselinePath, 'utf8'), baselinePath);
+        if (!baselineFileMapped) {
+          reason = 'baseline-file-unmapped';
+          action = 'include-baseline-file';
+        } else {
+          reason = 'baseline-targets-unmapped';
+          action = 'fix-baseline-targets';
+        }
+      } catch {
+        reason = 'baseline-parse-failed';
+        action = 'fix-baseline-parse';
+      }
+    }
+  }
+
+  return {
+    kind: 'deleted-file',
+    file,
+    status: 'unknown',
+    reason,
+    ...(reason === 'baseline-targets-unmapped' ? { targetIds: unmappedBaselineTargetIds } : {}),
+    recovery: {
+      action,
+      cli: `--baseline-root ${shellQuote(baselineRootOption ?? '/path/to/baseline-checkout')}`,
+    },
+  };
+}
+
+function shellQuote(value: string): string {
+  if (/^[a-z0-9_./:@+-]+$/i.test(value)) return value;
+  return `'${value.replace(/'/g, `'"'"'`)}'`;
+}
+
 function normalizeTargets(targets: ImpactTarget[], root: string): ValidTarget[] {
   const byId = new Map<string, ValidTarget>();
   for (const target of targets) {
@@ -319,7 +536,7 @@ function normalizeTargets(targets: ImpactTarget[], root: string): ValidTarget[] 
       }
       continue;
     }
-    byId.set(target.id, { target: normalizedTarget, entryFiles: [] });
+    byId.set(target.id, { target: normalizedTarget, entryFiles: [], baselineEntryFiles: [] });
   }
   return [...byId.values()].sort((a, b) => a.target.id.localeCompare(b.target.id));
 }
@@ -329,6 +546,8 @@ function validateTargets(
   graph: DependencyGraph,
   root: string,
   diagnostics: ImpactDiagnostic[],
+  baselineGraph?: DependencyGraph,
+  baselineRoot?: string,
 ): ValidTarget[] {
   return targets.filter((item) => {
     const target = item.target;
@@ -336,8 +555,12 @@ function validateTargets(
       const absoluteFile = toAbsolutePath(root, target.file);
       if (graph.getFileNode(absoluteFile)) {
         item.entryFiles = [absoluteFile];
-        return true;
       }
+      if (baselineGraph && baselineRoot) {
+        const baselineFile = toAbsolutePath(baselineRoot, target.file);
+        if (baselineGraph.getFileNode(baselineFile)) item.baselineEntryFiles = [baselineFile];
+      }
+      if (item.entryFiles.length > 0 || item.baselineEntryFiles.length > 0) return true;
       diagnostics.push({
         level: 'warning',
         code: 'missing-entry-file',
@@ -351,7 +574,11 @@ function validateTargets(
       .filter((file) => file.package === target.package)
       .map((file) => file.id)
       .sort();
-    if (item.entryFiles.length > 0) return true;
+    item.baselineEntryFiles = baselineGraph?.files()
+      .filter((file) => file.package === target.package)
+      .map((file) => file.id)
+      .sort() ?? [];
+    if (item.entryFiles.length > 0 || item.baselineEntryFiles.length > 0) return true;
     diagnostics.push({
       level: 'warning',
       code: 'missing-package',
@@ -368,13 +595,7 @@ function findTargetImpact(
   includeTypeOnly: boolean,
   maxChainsPerTarget: number,
   remainingTotalChains: number,
-): {
-  chains: string[][];
-  truncated: boolean;
-  knownMinimum: number;
-  omittedWitness?: string[];
-  limitCause?: 'per-target' | 'total' | 'both';
-} {
+): ImpactSearchResult {
   const chains: string[][] = [];
   if (changedFiles.size === 0) return { chains, truncated: false, knownMinimum: 0 };
   const chainLimit = Math.max(0, Math.min(maxChainsPerTarget, remainingTotalChains));
@@ -514,6 +735,14 @@ function toAbsolutePath(root: string, file: string): string {
     throw new Error(`Path "${file}" is outside the analysis root.`);
   }
   return absolute;
+}
+
+function isDirectory(path: string): boolean {
+  try {
+    return statSync(path).isDirectory();
+  } catch {
+    return false;
+  }
 }
 
 function normalizeRelativePath(file: string): string {

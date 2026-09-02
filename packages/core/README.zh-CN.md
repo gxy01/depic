@@ -127,6 +127,13 @@ diff 还原保留未改变的文件末尾换行。这些修复需要 `0.1.10` �
 仍产生醒目的 `unmapped-file` warning；其余文档和产物路径产生 info 级
 `non-source-file`。两类都会保留在 JSON 报告中，后者不是隐式忽略，也不证明无影响。
 
+从 `0.1.17` 起（Issue #40），`ImpactOptions.baselineRoot` 指向变更前 checkout。Depic
+构建第二张图，使用旧图反向依赖分析删除路径，也支持只存在于 baseline 的目标。旧图证明的
+影响带 `analysisBasis: "baseline"`，与 head 证据合并时为 `"mixed"`。缺少可用证据时，
+顶层 `analysisStatus` 为 `"incomplete"`，删除路径仍保留在 `changedFiles`，并通过
+`unresolvedChanges` 给出稳定 reason 与 recovery action。baseline 路径只作为运行时输入，
+不写入共享配置。
+
 `analyze()` 和 `analyzeImpact()` 都会读取 `depic.config.json`。该文件可配置
 `include`、`exclude`、`tsconfigPath`、`extensions`、`symbolLevel`、
 `workspace` 与 `impact`；显式 API 参数优先。

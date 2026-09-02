@@ -82,6 +82,12 @@ getter/setter 和不确定结构仍保留文件级影响。
 使用机器可区分的 info 级 `non-source-file` 诊断，并显示在紧凑摘要中。分类会采用
 最终生效的 `include`、`exclude` 和 `extensions` 配置。
 
+从 `0.1.17` 起，`impact --baseline-root <path>` 会构建变更前依赖图，将已删除源码沿
+旧图传播到 entry/package。无法取得可用 baseline 证据时，报告仍在 `changedFiles`
+保留删除路径，把顶层 `analysisStatus` 设为 `incomplete`，并在 `unresolvedChanges`
+记录结构化 unknown。CLI 成功完成分析时仍返回 0，因此 CI 必须检查报告状态，不能把
+空影响列表当作可信的“无影响”。
+
 需要主动忽略生成文件的变更时，可使用 `impact.excludeChangedFiles` 只过滤输入 diff，
 保留依赖图中的模块。报告会明确记录“未分析”，不能解释成“无影响”；用法见下方 CLI 文档
 （`0.1.6` 及更早版本不支持该选项）。

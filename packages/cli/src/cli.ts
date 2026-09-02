@@ -12,7 +12,7 @@ Usage:
   depic cycles <root>        Detect circular dependencies
   depic dependents <file> [root]  Show files that depend on <file>
   depic stats <root>         Show dependency statistics
-  depic impact [root] --diff <path> [--targets <path>] --report <path> [chain limits]
+  depic impact [root] --diff <path> [--targets <path>] --report <path> [--baseline-root <path>] [chain limits]
                               Report potentially impacted entries and packages
   depic web <root> [output]  Generate interactive HTML visualization
   depic serve <root> [port]  Start local web server with live visualization
@@ -86,6 +86,7 @@ Options:
   --diff <path>               Unified diff to analyze (required)
   --targets <path>            JSON target file; overrides configured targets
   --report <path>             Output path for the JSON report (required)
+  --baseline-root <path>      Pre-change checkout used to analyze deleted files
   --max-chains-per-target <n> Override the per-target chain limit for this run
   --max-total-chains <n>      Override the report-wide chain limit for this run
   -h, --help                  Show this help
@@ -205,17 +206,25 @@ export async function runCli(
       const diff = getOption('--diff');
       const targets = getOption('--targets');
       const report = getOption('--report');
+      const baselineRoot = getOption('--baseline-root');
       const maxChainsPerTarget = getPositiveIntegerOption('--max-chains-per-target');
       const maxTotalChains = getPositiveIntegerOption('--max-total-chains');
       if (!diff || !report) {
         throw new Error('impact requires --diff <path> and --report <path>.');
+      }
+      if (args.includes('--baseline-root') && (!baselineRoot || baselineRoot.startsWith('--'))) {
+        throw new Error('--baseline-root requires a path.');
       }
       writeStdout((await runImpact(
         resolve(args[1]?.startsWith('--') ? '.' : args[1] ?? '.'),
         resolve(diff),
         targets ? resolve(targets) : undefined,
         resolve(report),
-        { maxChainsPerTarget, maxTotalChains },
+        {
+          baselineRoot: baselineRoot ? resolve(baselineRoot) : undefined,
+          maxChainsPerTarget,
+          maxTotalChains,
+        },
       )) + '\n');
       break;
     }
