@@ -88,6 +88,10 @@ getter/setter 和不确定结构仍保留文件级影响。
 记录结构化 unknown。CLI 成功完成分析时仍返回 0，因此 CI 必须检查报告状态，不能把
 空影响列表当作可信的“无影响”。
 
+从 `0.1.18` 起，影响分析统一支持 header、file marker 及 rename/copy metadata
+中的 Git C-style quoted UTF-8 pathname，可正确解码空格、引号、八进制字节和 POSIX
+反斜杠；非法编码、绝对路径和 traversal 继续失败关闭，copy metadata 不再误报为 rename。
+
 需要主动忽略生成文件的变更时，可使用 `impact.excludeChangedFiles` 只过滤输入 diff，
 保留依赖图中的模块。报告会明确记录“未分析”，不能解释成“无影响”；用法见下方 CLI 文档
 （`0.1.6` 及更早版本不支持该选项）。

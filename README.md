@@ -105,6 +105,12 @@ top-level `analysisStatus` to `incomplete`, and records a structured unknown in
 `unresolvedChanges`; a successful CLI run still exits zero, so CI must inspect
 the report status instead of treating an empty impact list as authoritative.
 
+From `0.1.18`, impact analysis accepts Git's C-style quoted UTF-8 pathnames in
+headers, file markers, and rename/copy metadata. Valid spaces, quotes, octal
+bytes, and POSIX backslashes are decoded consistently; malformed encodings,
+absolute paths, and traversal remain fail-closed. Copy metadata is no longer
+reported as a rename.
+
 For explicitly ignored generated-file changes, `impact.excludeChangedFiles` filters
 the input diff without removing modules from the dependency graph. Exclusions are
 reported as **not analyzed**, not unaffected. See the CLI guide below (this option

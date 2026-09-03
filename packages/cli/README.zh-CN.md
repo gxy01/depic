@@ -60,6 +60,11 @@ depic serve <root> [port]  启动本地 Web 服务器
 `symbolLevel`、`workspace` 和影响分析选项。显式 API/CLI 参数优先；
 `--targets` 仅作为临时或旧配置兼容覆盖。
 
+`impact` 会统一解析 `diff --git`、`---` / `+++`、rename 和 copy 字段中的 Git
+C-style quoted UTF-8 pathname，包括空格、引号和 POSIX 反斜杠。非法 escape、
+无效 UTF-8、绝对路径或 traversal 会在写 report 前失败；当前不支持任意非 UTF-8
+Git 文件名。
+
 ### 符号级影响精化（0.1.8+）
 
 对支持的代码，影响分析自动沿具名/别名 re-export、星号 barrel 和静态 namespace
@@ -179,7 +184,7 @@ pnpm exec depic impact . \
 运行产物目录保持忽略。需要团队共享时，请审查并提交根目录的
 `depic.config.json`。
 
-无法修改依赖清单的临时任务可使用 `pnpm dlx @depic/cli@0.1.17 impact ...`，并显式固定版本。
+无法修改依赖清单的临时任务可使用 `pnpm dlx @depic/cli@0.1.18 impact ...`，并显式固定版本。
 
 ## License
 

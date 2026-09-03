@@ -170,7 +170,8 @@ interface ImpactReport {
 
 ## 影响计算
 
-1. 验证并解析 unified diff，提取新增/修改/删除/重命名文件及其变更行范围。
+1. 验证并解析 unified diff，提取新增/修改/删除/重命名/copy 文件及其变更行范围；
+   对 header、marker 和 rename/copy metadata 使用同一 Git pathname 解码与 containment 校验。
    按 `excludeChangedFiles` 过滤解析后的路径，并记录被过滤文件的诊断。
 2. 使用既有 `analyze()` 和传入的 `AnalyzeOptions` 构建当前工作区依赖图。
 3. 标准化并验证目标；相同目标去重，同一 `id` 映射到不同目标时报错。
@@ -303,6 +304,17 @@ depic impact \
 - 命中全局影响规则的删除已保守覆盖全部有效目标，无需 baseline，状态保持 `complete`。
 - 成功生成 incomplete 报告时 CLI 仍返回 0，并醒目输出 `INCOMPLETE impact analysis`；
   CI 必须读取 `analysisStatus`，不能把退出码 0 或空 `impacts` 当作完整的零影响证明。
+
+## Git quoted pathname（0.1.18 / Issue #42）
+
+- `diff --git`、`---` / `+++`、`rename from/to` 和 `copy from/to` 统一解析 Git
+  C-style quoted pathname；三位八进制序列按字节组装后严格解码为 UTF-8。
+- `core.quotePath=true` 与 `false` 生成的等价 diff 返回相同仓库相对路径；普通空格、
+  文件名中的 ` b/`、引号和 POSIX 反斜杠不会被误拆或错误重写。
+- header、marker 与 extended metadata 必须一致。copy 目标参与 head 图传播，但不会产生
+  `renamed-file` 或旧路径 baseline 警告；rename 的既有保守 baseline 契约保持不变。
+- 非法/截断 escape、无效 UTF-8、NUL、绝对/设备路径、原始或解码后的 `..` traversal
+  在图或文件系统查询前失败。当前不承诺任意非 UTF-8 Git 文件名。
 
 ## 非目标
 

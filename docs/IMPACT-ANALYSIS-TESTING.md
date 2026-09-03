@@ -86,8 +86,9 @@ src/
 ### 1. Diff 与输入验证
 
 - 解析单文件修改、新增、删除、重命名和多文件 unified diff。
-- 支持带 `a/`、`b/` 前缀的标准 Git diff 路径。
-- 拒绝缺少文件头、内容不完整或路径越出 `root` 的 diff。
+- 支持带 `a/`、`b/` 前缀的标准 Git diff 路径，并逐项覆盖 header、marker、rename/copy metadata 的 quoted/raw 形式。
+- 对 `core.quotePath=true/false` 的真实 Git 输出验证等价结果；覆盖 UTF-8 八进制字节、空格、嵌入 ` b/`、引号、POSIX 反斜杠及 copy 不误标 rename。
+- 拒绝缺少文件头、字段矛盾、非法 escape/UTF-8、绝对路径、原始或解码后 `..` traversal 以及路径越出 `root` 的 diff。
 - 为空 diff、空目标清单、重复目标、冲突目标 ID 分别断言其规定行为。
 - 验证根目录 `depic.config.json` 可提供分析选项和 `impact.targets`，显式参数可以覆盖配置。
 - 验证所有返回路径均相对于 `root`，不泄漏临时目录绝对路径。

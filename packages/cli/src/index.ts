@@ -37,7 +37,12 @@ export async function runImpact(
   reportPath: string,
   overrides: Pick<ImpactOptions, 'baselineRoot' | 'maxChainsPerTarget' | 'maxTotalChains'> = {},
 ): Promise<string> {
-  const diff = readFileSync(diffPath, 'utf-8');
+  let diff: string;
+  try {
+    diff = new TextDecoder('utf-8', { fatal: true }).decode(readFileSync(diffPath));
+  } catch {
+    throw new Error('Impact diff must be valid UTF-8.');
+  }
   let targets: ImpactTarget[] | undefined;
   if (targetsPath) {
     const parsedTargets = JSON.parse(readFileSync(targetsPath, 'utf-8')) as unknown;

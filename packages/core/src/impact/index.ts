@@ -19,6 +19,17 @@ import type {
 
 const DEFAULT_MAX_CHAINS_PER_TARGET = 20;
 const DEFAULT_MAX_TOTAL_CHAINS = 10_000;
+const GIT_SIMPLE_ESCAPES: Readonly<Record<string, number>> = {
+  a: 0x07,
+  b: 0x08,
+  f: 0x0c,
+  n: 0x0a,
+  r: 0x0d,
+  t: 0x09,
+  v: 0x0b,
+  '\\': 0x5c,
+  '"': 0x22,
+};
 const DEFAULT_GLOBAL_IMPACT_PATTERNS = [
   'depic.config.json',
   'package.json',
@@ -35,7 +46,12 @@ interface DiffFile {
   path: string;
   oldPath?: string;
   patch: string;
-  status: 'added' | 'modified' | 'deleted' | 'renamed';
+  status: 'added' | 'modified' | 'deleted' | 'renamed' | 'copied';
+}
+
+interface DiffPathPair {
+  oldPath: string;
+  newPath: string;
 }
 
 interface ValidTarget {
@@ -172,7 +188,7 @@ export async function analyzeImpact(options: ImpactOptions): Promise<ImpactRepor
         });
         continue;
       }
-      const baselinePath = baselineRoot ? toAbsolutePath(baselineRoot, file.path) : undefined;
+      const baselinePath = baselineRoot ? toAbsoluteGitPath(baselineRoot, file.path) : undefined;
       const baselineFileMapped = Boolean(
         baselineGraph && baselinePath && baselineGraph.getFileNode(baselinePath),
       );
@@ -219,7 +235,7 @@ export async function analyzeImpact(options: ImpactOptions): Promise<ImpactRepor
       reportChangedFiles.push(file.path);
       continue;
     }
-    const absolutePath = toAbsolutePath(root, file.path);
+    const absolutePath = toAbsoluteGitPath(root, file.path);
     if (graph.getFileNode(absolutePath)) {
       if (symbolAnalyzer.isSemanticNoop(absolutePath, patches.get(file.path))) {
         semanticNoops.add(file.path);
@@ -262,7 +278,7 @@ export async function analyzeImpact(options: ImpactOptions): Promise<ImpactRepor
     };
   }
 
-  const changedAbsoluteFiles = new Set(stableChangedFiles.map((file) => toAbsolutePath(root, file)));
+  const changedAbsoluteFiles = new Set(stableChangedFiles.map((file) => toAbsoluteGitPath(root, file)));
   const maxChainsPerTarget = options.maxChainsPerTarget
     ?? impactConfig?.maxChainsPerTarget
     ?? DEFAULT_MAX_CHAINS_PER_TARGET;
@@ -284,7 +300,7 @@ export async function analyzeImpact(options: ImpactOptions): Promise<ImpactRepor
     const searches: ImpactSearchEvidence[] = [];
     const targetChanges = new Set(changedAbsoluteFiles);
     for (const file of stableChangedFiles) {
-      const absolute = toAbsolutePath(root, file);
+      const absolute = toAbsoluteGitPath(root, file);
       const evidence = symbolAnalyzer.evaluate(target.target.id, target.entryFiles, absolute, patches.get(file));
       if (evidence) {
         symbolEvidence.push(evidence);
@@ -483,7 +499,7 @@ function classifyUnresolvedDeletion(
     reason = baselineFailure;
     action = 'fix-baseline-analysis';
   } else {
-    const baselinePath = baselineRoot ? toAbsolutePath(baselineRoot, file) : undefined;
+    const baselinePath = baselineRoot ? toAbsoluteGitPath(baselineRoot, file) : undefined;
     if (!baselinePath || !existsSync(baselinePath)) {
       reason = 'baseline-file-missing';
       action = 'restore-baseline-file';
@@ -700,39 +716,303 @@ function parseUnifiedDiff(diff: string): DiffFile[] {
   const files: DiffFile[] = [];
   for (const block of blocks) {
     const lines = block.split('\n');
-    const header = lines[0]?.trim();
-    const headerMatch = header.match(/^a\/(.+) b\/(.+)$/);
-    if (!headerMatch) {
-      throw new Error('Invalid unified diff: malformed "diff --git" header.');
+    const header = stripCarriageReturn(lines[0] ?? '');
+    const firstHunk = lines.findIndex((line) => line.startsWith('@@'));
+    const headerLines = lines.slice(1, firstHunk < 0 ? lines.length : firstHunk);
+    const oldMarkerLine = findUniqueDiffLine(headerLines, '--- ');
+    const newMarkerLine = findUniqueDiffLine(headerLines, '+++ ');
+    if (Boolean(oldMarkerLine) !== Boolean(newMarkerLine)) {
+      throw new Error('Invalid unified diff: incomplete "---" / "+++" marker pair.');
     }
-    const oldPath = headerMatch[1];
-    const defaultNewPath = headerMatch[2];
-    const oldMarker = lines.find((line) => line.startsWith('--- '));
-    const newMarker = lines.find((line) => line.startsWith('+++ '));
-    const renameFrom = lines.find((line) => line.startsWith('rename from '));
-    const renameTo = lines.find((line) => line.startsWith('rename to '));
-    const isDeleted = newMarker === '+++ /dev/null';
-    const isAdded = oldMarker === '--- /dev/null';
-    const isRenamed = Boolean(renameFrom || renameTo) || oldPath !== defaultNewPath;
-    const renamedOldPath = renameFrom?.slice('rename from '.length) ?? oldPath;
-    const renamedNewPath = renameTo?.slice('rename to '.length) ?? defaultNewPath;
-    const path = isDeleted ? oldPath : isRenamed ? renamedNewPath : defaultNewPath;
+    const oldMarker = oldMarkerLine
+      ? parseMarkerPath(oldMarkerLine, '--- ', 'a/', 'old marker')
+      : undefined;
+    const newMarker = newMarkerLine
+      ? parseMarkerPath(newMarkerLine, '+++ ', 'b/', 'new marker')
+      : undefined;
+    if (oldMarker === null && newMarker === null) {
+      throw new Error('Invalid unified diff: both file markers cannot be /dev/null.');
+    }
+
+    const rename = parseExtendedPathPair(headerLines, 'rename');
+    const copy = parseExtendedPathPair(headerLines, 'copy');
+    if (rename && copy) {
+      throw new Error('Invalid unified diff: a file cannot be both renamed and copied.');
+    }
+    if ((rename || copy) && (oldMarker === null || newMarker === null)) {
+      throw new Error('Invalid unified diff: rename/copy metadata cannot use /dev/null markers.');
+    }
+
+    const markerOldHint = typeof oldMarker === 'string'
+      ? oldMarker
+      : oldMarker === null && typeof newMarker === 'string' ? newMarker : undefined;
+    const markerNewHint = typeof newMarker === 'string'
+      ? newMarker
+      : newMarker === null && typeof oldMarker === 'string' ? oldMarker : undefined;
+    const pair = rename ?? copy;
+    const { oldPath, newPath } = parseDiffGitHeader(header, {
+      oldPath: pair?.oldPath ?? markerOldHint,
+      newPath: pair?.newPath ?? markerNewHint,
+    });
+
+    if (typeof oldMarker === 'string' && oldMarker !== oldPath
+      || typeof newMarker === 'string' && newMarker !== newPath) {
+      throw new Error('Invalid unified diff: file markers do not match the "diff --git" header.');
+    }
+    if (rename && (rename.oldPath !== oldPath || rename.newPath !== newPath)) {
+      throw new Error('Invalid unified diff: rename metadata does not match the "diff --git" header.');
+    }
+    if (copy && (copy.oldPath !== oldPath || copy.newPath !== newPath)) {
+      throw new Error('Invalid unified diff: copy metadata does not match the "diff --git" header.');
+    }
+
+    const isDeleted = newMarker === null;
+    const isAdded = oldMarker === null;
+    const isRenamed = Boolean(rename) || !copy && oldPath !== newPath;
+    const isCopied = Boolean(copy);
+    const path = isDeleted ? oldPath : pair?.newPath ?? newPath;
     files.push({
-      path: normalizeRelativePath(path),
-      oldPath: isRenamed ? normalizeRelativePath(renamedOldPath) : undefined,
+      path,
+      oldPath: isRenamed ? rename?.oldPath ?? oldPath : undefined,
       patch: block,
-      status: isRenamed ? 'renamed' : isDeleted ? 'deleted' : isAdded ? 'added' : 'modified',
+      status: isRenamed
+        ? 'renamed'
+        : isCopied ? 'copied' : isDeleted ? 'deleted' : isAdded ? 'added' : 'modified',
     });
   }
   return files;
 }
 
+function findUniqueDiffLine(lines: string[], prefix: string): string | undefined {
+  const matches = lines.filter((line) => line.startsWith(prefix));
+  if (matches.length > 1) {
+    throw new Error(`Invalid unified diff: duplicate ${prefix.trim()} metadata.`);
+  }
+  return matches[0];
+}
+
+function parseExtendedPathPair(lines: string[], kind: 'rename' | 'copy'): DiffPathPair | undefined {
+  const fromLine = findUniqueDiffLine(lines, `${kind} from `);
+  const toLine = findUniqueDiffLine(lines, `${kind} to `);
+  if (Boolean(fromLine) !== Boolean(toLine)) {
+    throw new Error(`Invalid unified diff: incomplete ${kind} metadata pair.`);
+  }
+  if (!fromLine || !toLine) return undefined;
+  return {
+    oldPath: normalizeGitRelativePath(decodeGitPathField(
+      stripCarriageReturn(fromLine.slice(`${kind} from `.length)),
+      `${kind} source`,
+    )),
+    newPath: normalizeGitRelativePath(decodeGitPathField(
+      stripCarriageReturn(toLine.slice(`${kind} to `.length)),
+      `${kind} destination`,
+    )),
+  };
+}
+
+function parseMarkerPath(
+  line: string,
+  marker: '--- ' | '+++ ',
+  pathPrefix: 'a/' | 'b/',
+  label: string,
+): string | null {
+  const field = stripCarriageReturn(line.slice(marker.length));
+  if (field === '/dev/null') return null;
+  const path = decodeGitPathField(field, label, true);
+  return normalizePrefixedGitPath(path, pathPrefix, label);
+}
+
+function parseDiffGitHeader(
+  header: string,
+  expected: { oldPath?: string; newPath?: string },
+): DiffPathPair {
+  if (!header) throw new Error('Invalid unified diff: malformed "diff --git" header.');
+
+  if (header.startsWith('"')) {
+    const first = decodeCStyleQuotedPath(header, 0, 'header source');
+    if (header[first.end] !== ' ') {
+      throw new Error('Invalid unified diff: malformed "diff --git" header.');
+    }
+    const oldPath = normalizePrefixedGitPath(first.value, 'a/', 'header source');
+    const newPath = normalizePrefixedGitPath(
+      decodeGitPathField(header.slice(first.end + 1), 'header destination'),
+      'b/',
+      'header destination',
+    );
+    return validateHeaderCandidate({ oldPath, newPath }, expected);
+  }
+
+  const candidates = new Map<string, DiffPathPair>();
+  let firstError: Error | undefined;
+  for (let index = 0; index < header.length; index += 1) {
+    if (header[index] !== ' ') continue;
+    try {
+      const candidate = {
+        oldPath: normalizePrefixedGitPath(
+          decodeGitPathField(header.slice(0, index), 'header source'),
+          'a/',
+          'header source',
+        ),
+        newPath: normalizePrefixedGitPath(
+          decodeGitPathField(header.slice(index + 1), 'header destination'),
+          'b/',
+          'header destination',
+        ),
+      };
+      candidates.set(`${candidate.oldPath}\0${candidate.newPath}`, candidate);
+    } catch (error) {
+      if (!firstError && error instanceof Error) firstError = error;
+    }
+  }
+
+  let matches = [...candidates.values()].filter((candidate) =>
+    (expected.oldPath === undefined || candidate.oldPath === expected.oldPath)
+    && (expected.newPath === undefined || candidate.newPath === expected.newPath),
+  );
+  if (matches.length === 0 && candidates.size === 0 && firstError) throw firstError;
+  if (matches.length === 0) {
+    throw new Error('Invalid unified diff: header paths do not match file metadata.');
+  }
+  if (matches.length > 1 && expected.oldPath === undefined && expected.newPath === undefined) {
+    const samePath = matches.filter((candidate) => candidate.oldPath === candidate.newPath);
+    if (samePath.length === 1) matches = samePath;
+  }
+  if (matches.length !== 1) {
+    throw new Error('Invalid unified diff: ambiguous "diff --git" header paths.');
+  }
+  return matches[0];
+}
+
+function validateHeaderCandidate(
+  candidate: DiffPathPair,
+  expected: { oldPath?: string; newPath?: string },
+): DiffPathPair {
+  if (expected.oldPath !== undefined && candidate.oldPath !== expected.oldPath
+    || expected.newPath !== undefined && candidate.newPath !== expected.newPath) {
+    throw new Error('Invalid unified diff: header paths do not match file metadata.');
+  }
+  return candidate;
+}
+
+function normalizePrefixedGitPath(path: string, prefix: 'a/' | 'b/', label: string): string {
+  if (!path.startsWith(prefix)) {
+    throw new Error(`Invalid unified diff: ${label} must start with ${prefix}.`);
+  }
+  return normalizeGitRelativePath(path.slice(prefix.length));
+}
+
+function decodeGitPathField(field: string, label: string, allowTabSuffix = false): string {
+  if (!field) throw new Error(`Invalid unified diff: empty ${label} path.`);
+  if (field.startsWith('"')) {
+    const decoded = decodeCStyleQuotedPath(field, 0, label);
+    const trailing = field.slice(decoded.end);
+    if (trailing && (!allowTabSuffix || !trailing.startsWith('\t'))) {
+      throw new Error(`Invalid unified diff: trailing data after quoted ${label} path.`);
+    }
+    return decoded.value;
+  }
+  const value = allowTabSuffix ? field.split('\t', 1)[0] : field;
+  if (!value || value.includes('"') || [...value].some((character) => {
+    const code = character.charCodeAt(0);
+    return code <= 0x1f || code === 0x7f;
+  })) {
+    throw new Error(`Invalid unified diff: malformed ${label} path.`);
+  }
+  assertValidUnicode(value, label);
+  return value;
+}
+
+function decodeCStyleQuotedPath(
+  input: string,
+  start: number,
+  label: string,
+): { value: string; end: number } {
+  const bytes: number[] = [];
+  let index = start + 1;
+  let literalStart = index;
+
+  const appendLiteral = (end: number): void => {
+    const literal = input.slice(literalStart, end);
+    assertValidUnicode(literal, label);
+    for (const byte of Buffer.from(literal, 'utf8')) bytes.push(byte);
+  };
+
+  while (index < input.length) {
+    const character = input[index];
+    if (character === '"') {
+      appendLiteral(index);
+      if (bytes.includes(0)) {
+        throw new Error(`Invalid unified diff: NUL is not allowed in ${label} path.`);
+      }
+      try {
+        return {
+          value: new TextDecoder('utf-8', { fatal: true }).decode(Uint8Array.from(bytes)),
+          end: index + 1,
+        };
+      } catch {
+        throw new Error(`Invalid unified diff: ${label} path is not valid UTF-8.`);
+      }
+    }
+    if (character !== '\\') {
+      index += 1;
+      continue;
+    }
+
+    appendLiteral(index);
+    index += 1;
+    const escape = input[index];
+    if (escape in GIT_SIMPLE_ESCAPES) {
+      bytes.push(GIT_SIMPLE_ESCAPES[escape]);
+      index += 1;
+      literalStart = index;
+      continue;
+    }
+    const octal = input.slice(index, index + 3);
+    if (!/^[0-3][0-7]{2}$/u.test(octal)) {
+      throw new Error(`Invalid unified diff: invalid Git escape in ${label} path.`);
+    }
+    bytes.push(Number.parseInt(octal, 8));
+    index += 3;
+    literalStart = index;
+  }
+
+  throw new Error(`Invalid unified diff: unterminated quoted ${label} path.`);
+}
+
+function assertValidUnicode(value: string, label: string): void {
+  for (let index = 0; index < value.length; index += 1) {
+    const code = value.charCodeAt(index);
+    if (code >= 0xd800 && code <= 0xdbff) {
+      const next = value.charCodeAt(index + 1);
+      if (next >= 0xdc00 && next <= 0xdfff) {
+        index += 1;
+        continue;
+      }
+      throw new Error(`Invalid unified diff: ${label} path is not valid UTF-8.`);
+    }
+    if (code >= 0xdc00 && code <= 0xdfff) {
+      throw new Error(`Invalid unified diff: ${label} path is not valid UTF-8.`);
+    }
+  }
+}
+
+function stripCarriageReturn(value: string): string {
+  return value.endsWith('\r') ? value.slice(0, -1) : value;
+}
+
 function toAbsolutePath(root: string, file: string): string {
-  const normalized = normalizeRelativePath(file);
+  return resolveContainedPath(root, normalizeRelativePath(file), file);
+}
+
+function toAbsoluteGitPath(root: string, file: string): string {
+  return resolveContainedPath(root, normalizeGitRelativePath(file), file);
+}
+
+function resolveContainedPath(root: string, normalized: string, original: string): string {
   const absolute = resolve(root, normalized);
   const rootPrefix = root.endsWith(sep) ? root : root + sep;
   if (absolute !== root && !absolute.startsWith(rootPrefix)) {
-    throw new Error(`Path "${file}" is outside the analysis root.`);
+    throw new Error(`Path "${original}" is outside the analysis root.`);
   }
   return absolute;
 }
@@ -746,8 +1026,24 @@ function isDirectory(path: string): boolean {
 }
 
 function normalizeRelativePath(file: string): string {
-  const normalized = file.replace(/\\/g, '/').replace(/^\.?\//, '');
-  if (!normalized || normalized === '/dev/null' || normalized.startsWith('/') || normalized.split('/').includes('..')) {
+  return normalizePath(file, false);
+}
+
+function normalizeGitRelativePath(file: string): string {
+  return normalizePath(file, true);
+}
+
+function normalizePath(file: string, preservePosixBackslash: boolean): string {
+  if (preservePosixBackslash && sep === '\\' && file.includes('\\')) {
+    throw new Error(`Path "${file}" must be relative to the analysis root.`);
+  }
+  const separatorNormalized = preservePosixBackslash && sep !== '\\'
+    ? file
+    : file.replace(/\\/g, '/');
+  const normalized = separatorNormalized.replace(/^\.\//, '');
+  if (!normalized || normalized === '/dev/null' || normalized.startsWith('/')
+    || /^[a-z]:[\\/]/iu.test(normalized) || file.startsWith('\\\\')
+    || normalized.includes('\0') || normalized.split(/[\\/]/u).includes('..')) {
     throw new Error(`Path "${file}" must be relative to the analysis root.`);
   }
   return normalized;
