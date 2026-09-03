@@ -53,6 +53,11 @@ graph.toDot();
 Skill 识别；`package` 目标使用 Depic 自动发现的 monorepo 包名。共享目标统一放在根目录
 `depic.config.json` 的 `impact.targets` 中。
 
+Git 生成的 pathname 会在 `diff --git`、`---` / `+++` 及 rename/copy metadata
+中统一解码，支持 Git C-style quoted UTF-8 八进制字节、空格、引号和 POSIX
+反斜杠。非法 escape、无效 UTF-8、绝对路径和 `..` traversal 会在依赖图或文件系统
+查询前被拒绝；当前不支持任意非 UTF-8 Git 文件名。
+
 Skill 是上游适配器：利用 AI 检查框架约定，并让用户确认有意义的目标。
 `@depic/core` 保持确定性和框架无关，只根据已确认的目标节点计算可达性与依赖链。
 

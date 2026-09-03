@@ -65,6 +65,11 @@ The same config can hold `include`, `exclude`, `tsconfigPath`, `extensions`,
 `symbolLevel`, `workspace`, and impact options. Explicit API or CLI options take
 precedence; `--targets` remains available as a temporary or legacy override.
 
+`impact` accepts Git's C-style quoted UTF-8 pathnames in the `diff --git`,
+`---` / `+++`, rename, and copy fields, including spaces, quotes, and POSIX
+backslashes. Invalid escapes/UTF-8 and absolute or traversing paths fail before
+the report is written. Arbitrary non-UTF-8 Git filenames are not supported.
+
 ### Symbol-aware impact (0.1.8+)
 
 For supported code, impact automatically traces changed declarations through
@@ -205,7 +210,7 @@ the entire `.depic/` runtime artifact directory stays ignored. Review and commit
 the root `depic.config.json` when it should be shared with the team.
 
 For an ephemeral job that cannot modify the manifest, invoke a pinned version with
-`pnpm dlx @depic/cli@0.1.17 impact ...`.
+`pnpm dlx @depic/cli@0.1.18 impact ...`.
 
 ## License
 

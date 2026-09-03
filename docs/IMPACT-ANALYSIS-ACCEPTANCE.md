@@ -8,12 +8,13 @@
 | --- | --- |
 | A-01 | `@depic/core` 导出 `analyzeImpact()`、`ImpactOptions`、`EntryTarget`、`PackageTarget`、`ImpactTarget` 和报告相关类型。 |
 | A-02 | `analyzeImpact()` 使用现有 `AnalyzeOptions` 构建依赖图，且 `include`、`exclude`、`tsconfigPath`、`extensions`、`workspace` 均生效。 |
-| A-03 | API 接收标准 unified diff 文本、相对于 `root` 的 entry 路径、package name 和相对于 `root` 的变更路径。 |
-| A-04 | 格式无效的 diff 或规范化后逃出 `root` 的路径会抛出可识别的输入错误。 |
+| A-03 | API 接收标准 unified diff 文本、相对于 `root` 的 entry 路径、package name 和相对于 `root` 的变更路径；`diff --git`、`---` / `+++`、rename/copy metadata 中 Git C-style quoted UTF-8 pathname 的解码结果一致。 |
+| A-04 | 格式无效的 diff、非法 escape/UTF-8、绝对路径、`..` traversal 或规范化后逃出 `root` 的路径会在图和文件系统查询前抛出可识别的输入错误。 |
 | A-05 | 空目标清单返回成功的空影响结果，并包含 warning。 |
 | A-06 | 完全重复的目标被去重；同一 ID 映射到不同 entry/package 时失败并说明冲突。 |
 | A-07 | 根目录 `depic.config.json` 可同时提供分析选项和 `impact.targets`；显式 API 参数优先。 |
 | A-08 | `impact.excludeChangedFiles` 只过滤 diff 路径，默认关闭；API 同名列表替换配置，显式 `[]` 取消过滤，非法模式类型或越界路径报错。 |
+| A-09 | header、marker 和 rename/copy metadata 必须一致；copy 目标作为当前图中的变更证据，但不得误报 `renamed-file` 或要求不存在的旧路径基线。 |
 
 ## 影响识别
 

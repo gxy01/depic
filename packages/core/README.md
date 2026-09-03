@@ -55,6 +55,12 @@ Skill; a `package` target uses the monorepo package name already discovered by
 Depic. Store shared targets under `impact.targets` in the root
 `depic.config.json`.
 
+Git-generated pathname fields are decoded consistently across `diff --git`,
+`---` / `+++`, and rename/copy metadata. This includes Git's C-style quoted
+UTF-8 octal bytes, spaces, quotes, and POSIX backslashes. Malformed escapes,
+invalid UTF-8, absolute paths, and `..` traversal are rejected before graph or
+filesystem lookup; arbitrary non-UTF-8 Git filenames are not supported.
+
 The Skill is an upstream adapter: it uses AI to inspect framework conventions and
 ask the user to confirm meaningful targets. `@depic/core` remains deterministic
 and framework-independent; it computes reachability and dependency chains from

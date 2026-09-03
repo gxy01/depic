@@ -176,6 +176,62 @@ index 1111111..2222222 100644
     });
   });
 
+  it('impact accepts Git-quoted UTF-8 paths and writes the decoded path', async () => {
+    const diffFile = join(tmpDir, 'quoted.diff');
+    const reportFile = join(tmpDir, 'impact.json');
+    writeFileSync(join(tmpDir, 'café.ts'), 'export const value = 2;\n');
+    writeFileSync(join(tmpDir, 'depic.config.json'), JSON.stringify({
+      impact: { targets: [{ kind: 'entry', id: 'unicode', file: 'café.ts' }] },
+    }));
+    writeFileSync(diffFile, String.raw`diff --git "a/caf\303\251.ts" "b/caf\303\251.ts"
+--- "a/caf\303\251.ts"
++++ "b/caf\303\251.ts"
+@@ -1 +1 @@
+-export const value = 1;
++export const value = 2;
+`);
+
+    let output = '';
+    const exitCode = await runCli([
+      'impact', tmpDir, '--diff', diffFile, '--report', reportFile,
+    ], (value) => { output += value; });
+
+    expect(exitCode).toBe(0);
+    expect(output).toContain('Impacted targets: 1 / 1');
+    expect(JSON.parse(readFileSync(reportFile, 'utf8'))).toMatchObject({
+      analysisStatus: 'complete',
+      changedFiles: ['café.ts'],
+      impacts: [{ target: { id: 'unicode' }, changedFiles: ['café.ts'] }],
+    });
+  });
+
+  it('impact rejects an encoded traversal before writing a report', async () => {
+    const diffFile = join(tmpDir, 'unsafe.diff');
+    const reportFile = join(tmpDir, 'impact.json');
+    writeFileSync(diffFile, String.raw`diff --git "a/\056\056\057escape.ts" "b/\056\056\057escape.ts"
+`);
+
+    await expect(runCli([
+      'impact', tmpDir, '--diff', diffFile, '--report', reportFile,
+    ])).rejects.toThrow(/relative/u);
+    expect(() => readFileSync(reportFile)).toThrow();
+  });
+
+  it('impact rejects a non-UTF-8 diff file before writing a report', async () => {
+    const diffFile = join(tmpDir, 'invalid-utf8.diff');
+    const reportFile = join(tmpDir, 'impact.json');
+    writeFileSync(diffFile, Buffer.from([
+      ...Buffer.from('diff --git a/bad'),
+      0xc3,
+      0x28,
+      ...Buffer.from('.ts b/bad.ts\n'),
+    ]));
+
+    await expect(runImpact(tmpDir, diffFile, undefined, reportFile))
+      .rejects.toThrow('Impact diff must be valid UTF-8.');
+    expect(() => readFileSync(reportFile)).toThrow();
+  });
+
   it('makes truncation actionable and accepts one-off chain-limit overrides (issue #34)', async () => {
     const diffFile = join(tmpDir, 'change.diff');
     const reportFile = join(tmpDir, 'impact.json');
