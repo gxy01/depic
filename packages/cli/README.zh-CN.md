@@ -39,6 +39,9 @@ depic web <root> [output]  生成交互式 HTML 可视化
 depic serve <root> [port]  启动本地 Web 服务器
 ```
 
+生成或提供的可视化会在限制性内容策略下以 inert JSON 嵌入 graph 字符串，同时精确保留
+路径、package 和模块数据。
+
 运行 `depic --help` 查看命令概览，或运行 `depic <command> --help` 查看某个命令的
 参数和选项。`impact` 帮助还会列出 `depic.config.json` 配置，包括
 `impact.maxChainsPerTarget` 和 `impact.maxTotalChains`。
@@ -184,7 +187,7 @@ pnpm exec depic impact . \
 运行产物目录保持忽略。需要团队共享时，请审查并提交根目录的
 `depic.config.json`。
 
-无法修改依赖清单的临时任务可使用 `pnpm dlx @depic/cli@0.1.18 impact ...`，并显式固定版本。
+无法修改依赖清单的临时任务可使用 `pnpm dlx @depic/cli@0.1.19 impact ...`，并显式固定版本。
 
 ## License
 

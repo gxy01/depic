@@ -1,8 +1,9 @@
 import * as vscode from 'vscode';
 import { analyze, type DependencyGraph } from '@depic/core';
-import { generateHtmlFromGraph, getFileDetails } from '@depic/web';
+import { generateHtmlFromGraph } from '@depic/web';
 import { existsSync, readFileSync, appendFileSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
+import { createFileDetailsResponse } from './webview-message.js';
 
 let outputChannel: vscode.OutputChannel;
 let extContext: vscode.ExtensionContext;
@@ -119,10 +120,8 @@ async function showGraph(): Promise<void> {
       );
       // Handle file detail requests from webview
       panel.webview.onDidReceiveMessage((msg) => {
-        if (msg.type === 'getFileDetails') {
-          const details = getFileDetails(graph, msg.fileId);
-          panel.webview.postMessage({ type: 'fileDetails', fileId: msg.fileId, data: details });
-        }
+        const response = createFileDetailsResponse(graph, msg);
+        if (response) panel.webview.postMessage(response);
       });
       panel.webview.html = html;
     },

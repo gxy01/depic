@@ -12,6 +12,7 @@ English | [中文](https://github.com/gxy01/depic/blob/main/packages/web/README.
 - **Package filter** — Monorepo support: auto-detect sub-packages, filter by dropdown
 - **Cycle highlighting** — Files in circular dependencies marked in red
 - **Self-contained** — Single HTML file, no server required
+- **Structured embedding** — Graph strings round-trip through an inert JSON data block under a restrictive content policy
 
 ## Install
 

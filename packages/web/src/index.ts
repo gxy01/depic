@@ -3,6 +3,11 @@ import { createServer } from 'node:http';
 import { readFileSync, existsSync } from 'node:fs';
 import { resolve, dirname, relative, sep } from 'node:path';
 import { fileURLToPath } from 'node:url';
+import {
+  FALLBACK_HTML_SHELL,
+  getContentSecurityPolicy,
+  renderGraphHtml,
+} from './embedded-graph.js';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 
@@ -17,7 +22,7 @@ function getHtmlShell(): string {
     if (existsSync(p)) return readFileSync(p, 'utf-8');
   }
   // Fallback: minimal shell
-  return '<!DOCTYPE html><html><body><div id="root"></div><script>window.__GRAPH__ = %%GRAPH_JSON%%;</script></body></html>';
+  return FALLBACK_HTML_SHELL;
 }
 
 /**
@@ -37,8 +42,7 @@ export function generateHtmlFromGraph(
   rootDir?: string,
 ): string {
   const shell = getHtmlShell();
-  const json = JSON.stringify(toLightweightJSON(graph, rootDir));
-  return shell.replace('%%GRAPH_JSON%%', json);
+  return renderGraphHtml(shell, toLightweightJSON(graph, rootDir));
 }
 
 /** 精简版序列化：仅含 Graph/Tree 需要的字段，大幅减小体积 */
@@ -111,7 +115,11 @@ export function startServer(rootDir: string, port = 3000): Promise<void> {
           res.end(JSON.stringify(graph.getCircularDependencies()));
         } else {
           const html = await generateHtml(rootDir);
-          res.writeHead(200, { 'Content-Type': 'text/html; charset=utf-8' });
+          res.writeHead(200, {
+            'Content-Type': 'text/html; charset=utf-8',
+            'Content-Security-Policy': getContentSecurityPolicy(html) ?? "default-src 'none'",
+            'X-Content-Type-Options': 'nosniff',
+          });
           res.end(html);
         }
       } catch (err) {

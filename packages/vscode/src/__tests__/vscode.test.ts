@@ -4,6 +4,7 @@ import { join } from 'node:path';
 import { tmpdir } from 'node:os';
 import { analyze } from '@depic/core';
 import { generateHtmlFromGraph } from '@depic/web';
+import { createFileDetailsResponse } from '../webview-message';
 
 describe('VS Code extension logic', () => {
   let tmpDir: string;
@@ -58,7 +59,24 @@ describe('VS Code extension logic', () => {
     const html = generateHtmlFromGraph(graph, 'Workspace');
 
     expect(html).toContain('<!DOCTYPE html>');
-    expect(html).toContain('__GRAPH__');
+    expect(html).toContain('id="depic-graph-data"');
+    expect(html).toContain('Content-Security-Policy');
     expect(html).toContain('depic');
+  });
+
+  it('keeps file detail messaging structured and preserves graph strings', async () => {
+    const graph = await analyze({ root: tmpDir });
+    const fileId = join(tmpDir, 'a.ts');
+
+    const response = createFileDetailsResponse(graph, { type: 'getFileDetails', fileId });
+
+    expect(response).toMatchObject({
+      type: 'fileDetails',
+      fileId,
+      data: { id: fileId, imports: [{ specifier: './b' }] },
+    });
+    expect(JSON.parse(JSON.stringify(response))).toEqual(response);
+    expect(createFileDetailsResponse(graph, { type: 'getFileDetails', fileId: 1 }))
+      .toBeUndefined();
   });
 });

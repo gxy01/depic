@@ -1,7 +1,3 @@
-declare global {
-  interface Window { __GRAPH__?: LightweightGraph }
-}
-
 export interface LightNode {
   kind: 'file' | 'external';
   id: string;
@@ -56,7 +52,15 @@ export interface ImportedSymbol {
 }
 
 export function getData(): LightweightGraph {
-  return window.__GRAPH__ ?? { nodes: [], edges: [] };
+  const element = document.getElementById('depic-graph-data');
+  if (element?.textContent) {
+    try {
+      return JSON.parse(element.textContent) as LightweightGraph;
+    } catch {
+      // Development shells may not have an injected payload yet.
+    }
+  }
+  return { nodes: [], edges: [] };
 }
 
 /** 检测环 */
