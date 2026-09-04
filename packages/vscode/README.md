@@ -11,6 +11,7 @@ English | [中文](./README.zh-CN.md)
 - **Dependents Analysis** — See who depends on the current file
 - **Statistics** — File/edge/external module counts
 - **Monorepo Support** — Filter by sub-package
+- **Structured Webview Data** — Graph data stays inert and message replies remain structured
 
 ## Commands
 

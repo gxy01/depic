@@ -142,15 +142,25 @@ describe('CLI commands', () => {
     expect(parsed.edgeCount).toBe(1);
   });
 
-  it('web generates HTML file', async () => {
+  it('web generates HTML with inert, round-trippable graph data', async () => {
     const outFile = join(tmpDir, 'deps.html');
+    const boundary = '</ScRiPt><div data-depic-boundary="unexpected">';
+    writeFileSync(join(tmpDir, 'boundary.ts'), `import ${JSON.stringify(boundary)};`);
     const output = await runWeb(tmpDir, outFile);
 
     expect(output).toContain('Written to');
     // File should exist and contain HTML
     const content = readFileSync(outFile, 'utf-8');
     expect(content).toContain('<!DOCTYPE html>');
-    expect(content).toContain('__GRAPH__');
+    expect(content).toContain('id="depic-graph-data"');
+    expect(content).not.toContain(boundary);
+    const embedded = content.match(
+      /<script type="application\/json" id="depic-graph-data">([\s\S]*?)<\/script>/u,
+    );
+    if (!embedded) throw new Error('Embedded graph data element not found.');
+    expect(JSON.parse(embedded[1]).edges).toContainEqual(expect.objectContaining({
+      specifier: boundary,
+    }));
   });
 
   it('impact writes a JSON report and returns a summary', async () => {

@@ -43,6 +43,9 @@ depic web <root> [output]  Generate interactive HTML visualization
 depic serve <root> [port]  Start local web server with live visualization
 ```
 
+Generated and served visualizations embed graph strings as inert JSON under a
+restrictive content policy while preserving exact path, package, and module data.
+
 Run `depic --help` for the command overview or `depic <command> --help` for
 arguments and options specific to a command. The `impact` help also lists its
 `depic.config.json` settings, including `impact.maxChainsPerTarget` and
@@ -210,7 +213,7 @@ the entire `.depic/` runtime artifact directory stays ignored. Review and commit
 the root `depic.config.json` when it should be shared with the team.
 
 For an ephemeral job that cannot modify the manifest, invoke a pinned version with
-`pnpm dlx @depic/cli@0.1.18 impact ...`.
+`pnpm dlx @depic/cli@0.1.19 impact ...`.
 
 ## License
 
