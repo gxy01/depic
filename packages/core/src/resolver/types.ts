@@ -13,6 +13,9 @@ export interface ResolveOptions {
   /** tsconfig 路径，不填则自动查找 */
   tsconfigPath?: string;
 
+  /** 静态 bundler alias，按字面前缀匹配。 */
+  aliases?: AliasEntry[];
+
   /** 扩展名补全顺序 */
   extensions?: string[];
 
@@ -25,4 +28,9 @@ export interface WorkspaceConfig {
   root?: string;
   /** glob 模式，如 ['packages/*'] */
   packagePatterns?: string[];
+}
+
+export interface AliasEntry {
+  find: string;
+  replacement: string;
 }

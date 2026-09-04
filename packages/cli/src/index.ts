@@ -1,4 +1,4 @@
-import { analyze, analyzeImpact, type ImpactOptions, type ImpactTarget } from '@depic/core';
+import { analyze, analyzeImpact, suggestTargets, type ImpactOptions, type ImpactTarget } from '@depic/core';
 import { generateHtml, startServer } from '@depic/web';
 import { relative, join } from 'node:path';
 import { writeFileSync, existsSync, readFileSync, appendFileSync } from 'node:fs';
@@ -110,6 +110,11 @@ export async function runImpact(
   }
   lines.push(`Report written to ${reportPath}`);
   return lines.join('\n');
+}
+
+export async function runTargetsSuggest(rootDir: string): Promise<string> {
+  const report = await suggestTargets(rootDir);
+  return JSON.stringify(report, null, 2);
 }
 
 export async function runWeb(rootDir: string, output?: string): Promise<string> {

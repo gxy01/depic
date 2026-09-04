@@ -63,7 +63,7 @@ describe('CLI commands', () => {
     expect(stdout).toContain('--version');
   });
 
-  it.each(['init', 'analyze', 'cycles', 'dependents', 'stats', 'impact', 'web', 'serve'])(
+  it.each(['init', 'analyze', 'cycles', 'dependents', 'stats', 'impact', 'targets', 'web', 'serve'])(
     'prints subcommand help without executing %s',
     async (command) => {
       let stdout = '';
@@ -93,6 +93,18 @@ describe('CLI commands', () => {
     expect(stdout).toContain('--max-chains-per-target');
     expect(stdout).toContain('--max-total-chains');
     expect(stdout).toContain('--baseline-root');
+  });
+
+  it('targets suggest prints deterministic JSON', async () => {
+    writeFileSync(join(tmpDir, 'package.json'), JSON.stringify({ workspaces: ['packages/*'] }));
+    writeFileSync(join(tmpDir, 'pnpm-workspace.yaml'), 'packages:\n  - packages/*\n');
+    let stdout = '';
+    const exitCode = await runCli(['targets', 'suggest', tmpDir], (value) => { stdout += value; });
+    expect(exitCode).toBe(0);
+    const parsed = JSON.parse(stdout);
+    expect(parsed).toHaveProperty('targets');
+    expect(parsed).toHaveProperty('unknown');
+    expect(JSON.stringify(parsed)).toBe(JSON.stringify(JSON.parse(stdout)));
   });
 
   it('analyze --dot outputs DOT format', async () => {

@@ -15,6 +15,7 @@ export type {
 } from './resolver/types.js';
 
 export { analyze } from './analyze.js';
+export { suggestTargets } from './targets/index.js';
 export {
   DEPIC_CONFIG_FILE,
   loadDepicConfig,
@@ -35,6 +36,16 @@ export type {
   ImpactReport,
   ImpactSymbolEvidence,
 } from './impact/types.js';
+export type {
+  SuggestedEntryTarget,
+  SuggestedPackageTarget,
+  SuggestedTarget,
+  TargetEvidence,
+  TargetSuggestionDiagnostic,
+  TargetSuggestionReport,
+  UnknownTargetSuggestion,
+  TargetConfidence,
+} from './targets/types.js';
 export { DependencyGraph } from './graph/index.js';
 export type { AnalyzeOptions } from './types.js';
 export type {

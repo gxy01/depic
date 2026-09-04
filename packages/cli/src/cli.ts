@@ -1,5 +1,5 @@
 #!/usr/bin/env node
-import { runAnalyze, runCycles, runDependents, runStats, runWeb, runServe, runInit, runImpact } from './index.js';
+import { runAnalyze, runCycles, runDependents, runStats, runWeb, runServe, runInit, runImpact, runTargetsSuggest } from './index.js';
 import { readFileSync, realpathSync } from 'node:fs';
 import { resolve } from 'node:path';
 import { pathToFileURL } from 'node:url';
@@ -14,6 +14,7 @@ Usage:
   depic stats <root>         Show dependency statistics
   depic impact [root] --diff <path> [--targets <path>] --report <path> [--baseline-root <path>] [chain limits]
                               Report potentially impacted entries and packages
+  depic targets suggest [root]  Suggest deterministic entry/package targets as JSON
   depic web <root> [output]  Generate interactive HTML visualization
   depic serve <root> [port]  Start local web server with live visualization
 
@@ -99,6 +100,16 @@ Configuration (depic.config.json):
   impact.maxChainsPerTarget   Maximum dependency chains reported per target
   impact.maxTotalChains       Maximum dependency chains reported overall
 `,
+  targets: `Usage: depic targets suggest [root]
+
+Suggest deterministic entry and workspace package targets as JSON.
+
+Arguments:
+  root                        Project root (default: current directory)
+
+Options:
+  -h, --help                  Show this help
+`,
   web: `Usage: depic web [root] [output]
 
 Generate an interactive HTML dependency visualization.
@@ -175,6 +186,14 @@ export async function runCli(
     case 'stats': {
       const root = resolve(args[1] ?? '.');
       writeStdout((await runStats(root)) + '\n');
+      break;
+    }
+    case 'targets': {
+      if (args[1] !== 'suggest') {
+        throw new Error('targets currently supports only the suggest subcommand.');
+      }
+      const root = resolve(args[2] ?? '.');
+      writeStdout((await runTargetsSuggest(root)) + '\n');
       break;
     }
     case 'web': {

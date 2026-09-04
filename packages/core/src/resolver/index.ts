@@ -5,7 +5,7 @@ import {
   readdirSync,
 } from 'node:fs';
 import { resolve, dirname, extname, join, normalize } from 'node:path';
-import type { ResolveOptions, ResolvedTarget } from './types.js';
+import type { AliasEntry, ResolveOptions, ResolvedTarget } from './types.js';
 
 export const DEFAULT_RESOLVE_EXTENSIONS = ['.ts', '.tsx', '.js', '.jsx'];
 
@@ -24,10 +24,12 @@ export class Resolver {
   private extensions: string[];
   private tsconfigPathsCache = new Map<string, TsconfigPaths | null>();
   private workspaceMap: Map<string, string> = new Map();
+  private aliases: AliasEntry[];
 
   constructor(options: ResolveOptions) {
     this.root = options.root;
     this.extensions = options.extensions ?? DEFAULT_RESOLVE_EXTENSIONS;
+    this.aliases = [...(options.aliases ?? [])].sort((a, b) => b.find.length - a.find.length);
 
     // 预加载显式指定的 tsconfig
     if (options.tsconfigPath) {
@@ -50,14 +52,18 @@ export class Resolver {
       return this.resolveRelative(specifier, fromFile);
     }
 
-    // 2. tsconfig paths 别名 — 从 fromFile 向上查找最近的 tsconfig
+    // 2. bundler alias
+    const aliased = this.resolveAlias(specifier);
+    if (aliased) return aliased;
+
+    // 3. tsconfig paths 别名 — 从 fromFile 向上查找最近的 tsconfig
     const tsconfigPaths = this.getTsconfigForFile(fromFile);
     if (tsconfigPaths) {
       const result = this.resolveTsconfigPath(specifier, tsconfigPaths);
       if (result) return result;
     }
 
-    // 3. workspace 内部包
+    // 4. workspace 内部包
     if (this.workspaceMap.has(specifier)) {
       return {
         kind: 'internal',
@@ -66,15 +72,17 @@ export class Resolver {
       };
     }
 
-    // 4. 外部包（裸 specifier，不以 . 或 / 开头）
+    // 5. 外部包（裸 specifier，不以 . 或 / 开头）
     return { kind: 'external', name: specifier };
   }
 
   // ─── tsconfig ───────────────────────────────────────────────
 
   private findTsconfig(dir: string): string | null {
-    const candidate = join(dir, 'tsconfig.json');
-    if (existsSync(candidate)) return candidate;
+    const candidates = [join(dir, 'tsconfig.json'), join(dir, 'jsconfig.json')];
+    for (const candidate of candidates) {
+      if (existsSync(candidate)) return candidate;
+    }
     const parent = dirname(dir);
     if (parent === dir) return null; // reached root
     return this.findTsconfig(parent);
@@ -148,11 +156,12 @@ export class Resolver {
   ): TsconfigPaths | null {
     let dir = startDir;
     while (dir.length >= stopDir.length && dir.startsWith(stopDir)) {
-      const candidate = join(dir, 'tsconfig.json');
-      if (existsSync(candidate)) {
+      const candidates = [join(dir, 'tsconfig.json'), join(dir, 'jsconfig.json')];
+      for (const candidate of candidates) {
+        if (!existsSync(candidate)) continue;
         // 如果就是已缓存的，跳过
         for (const [cachedDir] of this.tsconfigPathsCache) {
-          if (candidate === join(cachedDir, 'tsconfig.json')) return null;
+          if (candidate === join(cachedDir, 'tsconfig.json') || candidate === join(cachedDir, 'jsconfig.json')) return null;
         }
         const paths = this.loadTsconfigPaths(candidate);
         if (paths) {
@@ -198,6 +207,29 @@ export class Resolver {
     if (resolved) return resolved;
 
     return { kind: 'unresolved', specifier };
+  }
+
+  private resolveAlias(specifier: string): ResolvedTarget | null {
+    for (const alias of this.aliases) {
+      if (!this.matchesAlias(specifier, alias.find)) continue;
+      const remainder = specifier === alias.find
+        ? ''
+        : specifier.slice(alias.find.length).replace(/^\//, '');
+      const candidate = this.toAbsoluteAliasPath(alias.replacement, remainder);
+      const resolved = this.tryResolveFile(candidate);
+      if (resolved) return resolved;
+      return { kind: 'unresolved', specifier };
+    }
+    return null;
+  }
+
+  private matchesAlias(specifier: string, find: string): boolean {
+    return specifier === find || specifier.startsWith(`${find}/`);
+  }
+
+  private toAbsoluteAliasPath(replacement: string, remainder: string): string {
+    const base = resolve(this.root, replacement);
+    return remainder ? join(base, remainder) : base;
   }
 
   /**
