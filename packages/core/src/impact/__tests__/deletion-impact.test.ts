@@ -263,7 +263,7 @@ describe('baseline-aware deleted-file impact (issue #40)', () => {
       maxTotalChains: 10,
     });
 
-    expect(report.analysisStatus).toBe('complete');
+    expect(report.analysisStatus).toBe('incomplete');
     expect(report.impacts).toEqual([expect.objectContaining({
       changedFiles: ['src/live.ts', 'src/removed.ts'],
       dependencyChains: [['src/entry.ts', 'src/live.ts']],

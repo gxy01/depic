@@ -102,6 +102,8 @@ describe('CLI commands', () => {
     const exitCode = await runCli(['targets', 'suggest', tmpDir], (value) => { stdout += value; });
     expect(exitCode).toBe(0);
     const parsed = JSON.parse(stdout);
+    expect(parsed).toHaveProperty('schemaVersion', 1);
+    expect(parsed).toHaveProperty('state');
     expect(parsed).toHaveProperty('targets');
     expect(parsed).toHaveProperty('unknown');
     expect(JSON.stringify(parsed)).toBe(JSON.stringify(JSON.parse(stdout)));
@@ -539,7 +541,7 @@ rename to new-helper.ts
 
     const output = await runImpact(tmpDir, diff, undefined, report);
 
-    expect(output).toContain('Unmapped source/analysis files (warning): missing.ts');
+    expect(output).toContain('Parse-failed source files (warning): missing.ts');
     expect(output).toContain('Diagnostics: 1 warning(s), 0 info');
   });
 

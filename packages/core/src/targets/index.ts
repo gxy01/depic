@@ -5,10 +5,12 @@ import {
   readdirSync,
   realpathSync,
 } from 'node:fs';
+import { spawnSync } from 'node:child_process';
 import { extname, basename, dirname, join, relative, resolve, sep } from 'node:path';
 import { parseSync } from '@swc/core';
 import { parseFile } from '../parser/index.js';
 import { Resolver } from '../resolver/index.js';
+import { DEPIC_CONFIG_FILE, loadDepicConfig } from '../config.js';
 import type { SuggestedEntryTarget, SuggestedPackageTarget, SuggestedTarget, TargetEvidence, TargetSuggestionDiagnostic, TargetSuggestionReport, UnknownTargetSuggestion } from './types.js';
 import type { ParsedFile, SourceLocation } from '../parser/index.js';
 import type { AliasEntry } from '../resolver/types.js';
@@ -104,6 +106,8 @@ interface UnknownCandidate {
   diagnostics: string[];
   aliasSource?: string;
   specifier?: string;
+  expression?: string;
+  recovery?: UnknownTargetSuggestion['recovery'];
 }
 
 interface DiscoveryState {
@@ -111,6 +115,7 @@ interface DiscoveryState {
   packages: PackageCandidate[];
   unknown: UnknownCandidate[];
   diagnostics: TargetSuggestionDiagnostic[];
+  claimedFiles: Set<string>;
 }
 
 export async function suggestTargets(root: string): Promise<TargetSuggestionReport> {
@@ -131,18 +136,22 @@ export async function suggestTargets(root: string): Promise<TargetSuggestionRepo
     packages: [],
     unknown: [],
     diagnostics: [],
+    claimedFiles: new Set<string>(),
   };
 
   discoverWorkspacePackages(absoluteRoot, workspaceSources, state);
-  discoverFileRoutes(absoluteRoot, state);
   discoverRouteDeclarations(absoluteRoot, resolver, state);
+  discoverFileRoutes(absoluteRoot, state);
 
   const targets = dedupeTargets([...state.packages, ...state.entries]);
   const unknown = dedupeUnknown(state.unknown);
   const diagnostics = sortDiagnostics(state.diagnostics);
+  const reportState = buildTargetSuggestionState(absoluteRoot, targets);
 
   return {
-    root: absoluteRoot,
+    schemaVersion: 1,
+    root: portableRootPath(absoluteRoot),
+    state: reportState,
     targets,
     unknown,
     diagnostics,
@@ -427,6 +436,7 @@ function discoverFileRoutes(
 ): void {
   const files = walkSourceFiles(root);
   for (const file of files) {
+    if (state.claimedFiles.has(relativeRoot(root, file))) continue;
     const route = deriveFileRoute(root, file);
     if (!route) continue;
     if (!isSafePathWithinRoot(root, file, state)) continue;
@@ -508,7 +518,23 @@ function discoverRouteDeclarations(
   const files = walkSourceFiles(root);
   for (const file of files) {
     const source = readFileSync(file, 'utf-8');
-    const parsed = parseFile(source, file);
+    let parsed: ParsedFile;
+    try {
+      parsed = parseFile(source, file);
+    } catch (error) {
+      state.diagnostics.push({
+        level: 'warning',
+        code: 'parse-failed',
+        message: `Unable to parse ${relativeRoot(root, file)} for route discovery.`,
+        files: [relativeRoot(root, file)],
+        reason: error instanceof Error ? error.message : String(error),
+        recovery: {
+          action: 'fix-parse-error',
+          cli: `depic targets suggest ${root}`,
+        },
+      });
+      continue;
+    }
     const imports = new Map<string, ImportBinding>();
     for (const imp of parsed.imports) {
       for (const symbol of imp.symbols) {
@@ -529,6 +555,16 @@ function discoverRouteDeclarations(
         decorators: true,
       });
     } catch {
+      state.diagnostics.push({
+        level: 'warning',
+        code: 'parse-failed',
+        message: `Unable to build route AST for ${relativeRoot(root, file)}.`,
+        files: [relativeRoot(root, file)],
+        recovery: {
+          action: 'fix-parse-error',
+          cli: `depic targets suggest ${root}`,
+        },
+      });
       continue;
     }
 
@@ -537,12 +573,12 @@ function discoverRouteDeclarations(
       if (node.type === 'ObjectExpression') {
         if (processed.has(node)) return;
         if (!looksLikeRouteObject(node)) return;
-        collectRouteObject(node, undefined, file, root, resolver, imports, state, processed);
+        collectRouteObject(node, undefined, file, root, resolver, imports, source, state, processed);
       }
       if (node.type === 'JSXOpeningElement') {
         if (processed.has(node)) return;
         if (!looksLikeRouteJsx(node)) return;
-        collectRouteJsx(node, file, root, resolver, imports, state, processed);
+        collectRouteJsx(node, file, root, resolver, imports, source, state, processed);
       }
     });
   }
@@ -555,6 +591,7 @@ function collectRouteObject(
   root: string,
   resolver: Resolver,
   imports: Map<string, ImportBinding>,
+  source: string,
   state: DiscoveryState,
   processed: WeakSet<object>,
 ): void {
@@ -568,8 +605,9 @@ function collectRouteObject(
       ? normalizeRouteId(parentPath ?? '/')
       : parentPath;
 
-  const resolved = resolveRouteComponent(props, file, root, resolver, imports);
+  const resolved = resolveRouteComponent(props, file, root, resolver, imports, source);
   if (routePath && resolved?.target) {
+    state.claimedFiles.add(resolved.target.file);
     state.entries.push({
       kind: 'entry',
       id: routePath,
@@ -596,6 +634,8 @@ function collectRouteObject(
       diagnostics: resolved.unknown.diagnostics,
       aliasSource: resolved.unknown.aliasSource,
       specifier: resolved.unknown.specifier,
+      expression: resolved.unknown.expression,
+      recovery: resolved.unknown.recovery,
     });
     state.diagnostics.push({
       level: 'warning',
@@ -619,11 +659,11 @@ function collectRouteObject(
   if (children) {
     for (const child of iterateRouteChildren(children)) {
       if (child.type === 'ObjectExpression' && !processed.has(child)) {
-        collectRouteObject(child, routePath, file, root, resolver, imports, state, processed);
+        collectRouteObject(child, routePath, file, root, resolver, imports, source, state, processed);
       } else if (child.type === 'JSXElement') {
         const opening = child.openingElement;
         if (!processed.has(opening) && looksLikeRouteJsx(opening)) {
-          collectRouteJsx(opening, file, root, resolver, imports, state, processed, routePath);
+          collectRouteJsx(opening, file, root, resolver, imports, source, state, processed, routePath);
         }
       }
     }
@@ -636,6 +676,7 @@ function collectRouteJsx(
   root: string,
   resolver: Resolver,
   imports: Map<string, ImportBinding>,
+  source: string,
   state: DiscoveryState,
   processed: WeakSet<object>,
   parentPath?: string,
@@ -646,8 +687,9 @@ function collectRouteJsx(
   const routePath = ownPath !== undefined
     ? joinRouteId(parentPath, ownPath)
     : parentPath;
-  const resolved = resolveRouteComponent(attrs, file, root, resolver, imports);
+  const resolved = resolveRouteComponent(attrs, file, root, resolver, imports, source);
   if (routePath && resolved?.target) {
+    state.claimedFiles.add(resolved.target.file);
     state.entries.push({
       kind: 'entry',
       id: routePath,
@@ -674,6 +716,8 @@ function collectRouteJsx(
       diagnostics: resolved.unknown.diagnostics,
       aliasSource: resolved.unknown.aliasSource,
       specifier: resolved.unknown.specifier,
+      expression: resolved.unknown.expression,
+      recovery: resolved.unknown.recovery,
     });
     state.diagnostics.push({
       level: 'warning',
@@ -691,6 +735,12 @@ interface ResolvedRouteComponent {
     diagnostics: string[];
     aliasSource?: string;
     specifier?: string;
+    expression?: string;
+    recovery?: {
+      action: string;
+      cli?: string;
+      config?: string;
+    };
   };
   confidence: SuggestedEntryTarget['confidence'];
   evidence: TargetEvidence[];
@@ -703,16 +753,42 @@ function resolveRouteComponent(
   root: string,
   resolver: Resolver,
   imports: Map<string, ImportBinding>,
+  source: string,
 ): ResolvedRouteComponent | undefined {
   const lazy = props.get('lazy');
-  const lazySpecifier = extractDynamicImportSpecifier(lazy);
-  if (lazySpecifier) {
-    const resolved = resolver.resolve(lazySpecifier, file);
+  const lazyImport = extractDynamicImportInfo(lazy, source);
+  if (lazyImport) {
+    if (!lazyImport.specifier) {
+      return {
+        unknown: {
+          reason: 'non-static-path',
+          diagnostics: [`Unable to statically evaluate lazy import expression in ${relativeRoot(root, file)}.`],
+          expression: lazyImport.expression,
+          recovery: {
+            action: 'convert-to-static-import',
+            cli: `depic targets suggest ${root}`,
+          },
+        },
+        confidence: 'low',
+        evidence: [{
+          kind: 'lazy-import',
+          file: relativeRoot(root, file),
+          detail: lazyImport.expression,
+        }],
+      };
+    }
+    const resolved = resolver.resolve(lazyImport.specifier, file);
     const evidence: TargetEvidence[] = [{
       kind: 'lazy-import',
       file: relativeRoot(root, file),
-      specifier: lazySpecifier,
+      specifier: lazyImport.specifier,
+      detail: lazyImport.expression,
       ...(resolved.kind === 'file' || resolved.kind === 'internal' ? { resolved: relativeRoot(root, resolved.path) } : {}),
+      ...(resolved.via?.kind === 'tsconfig' || resolved.via?.kind === 'jsconfig'
+        ? { source: relativeRoot(root, resolved.via.file) }
+        : resolved.via?.kind === 'bundler-alias'
+          ? { source: resolved.via.find }
+          : undefined),
     }];
     if (resolved.kind === 'file' || resolved.kind === 'internal') {
       return {
@@ -726,10 +802,15 @@ function resolveRouteComponent(
     }
     return {
       unknown: {
-        reason: resolverLooksLikeAlias(lazySpecifier) ? 'unresolved-alias' : 'dynamic-import',
-        diagnostics: [`Unable to resolve lazy import ${lazySpecifier} from ${relativeRoot(root, file)}.`],
-        aliasSource: inferAliasSource(lazySpecifier),
-        specifier: lazySpecifier,
+        reason: resolverLooksLikeAlias(lazyImport.specifier) ? 'unresolved-alias' : 'dynamic-import',
+        diagnostics: [`Unable to resolve lazy import ${lazyImport.specifier} from ${relativeRoot(root, file)}.`],
+        aliasSource: inferAliasSource(lazyImport.specifier),
+        specifier: lazyImport.specifier,
+        expression: lazyImport.expression,
+        recovery: {
+          action: 'make-import-resolvable',
+          cli: `depic targets suggest ${root}`,
+        },
       },
       confidence: 'low',
       evidence,
@@ -750,6 +831,11 @@ function resolveRouteComponent(
         detail: component.name,
         specifier: binding.specifier,
         ...(resolved.kind === 'file' || resolved.kind === 'internal' ? { resolved: relativeRoot(root, resolved.path) } : {}),
+        ...(resolved.via?.kind === 'tsconfig' || resolved.via?.kind === 'jsconfig'
+          ? { source: relativeRoot(root, resolved.via.file) }
+          : resolved.via?.kind === 'bundler-alias'
+            ? { source: resolved.via.find }
+            : undefined),
       }];
       if (resolved.kind === 'file' || resolved.kind === 'internal') {
         return {
@@ -763,10 +849,14 @@ function resolveRouteComponent(
       }
       return {
         unknown: {
-          reason: resolverLooksLikeAlias(binding.specifier) ? 'unresolved-alias' : 'missing-component',
+          reason: resolverLooksLikeAlias(binding.specifier) ? 'unresolved-alias' : 'resolution-failed',
           diagnostics: [`Unable to resolve component binding ${component.name} from ${relativeRoot(root, file)}.`],
           aliasSource: inferAliasSource(binding.specifier),
           specifier: binding.specifier,
+          recovery: {
+            action: 'fix-import-resolution',
+            cli: `depic targets suggest ${root}`,
+          },
         },
         confidence: 'low',
         evidence,
@@ -802,6 +892,11 @@ function resolveRouteComponent(
     detail: component.name,
     specifier: binding.specifier,
     ...(resolved.kind === 'file' || resolved.kind === 'internal' ? { resolved: relativeRoot(root, resolved.path) } : {}),
+    ...(resolved.via?.kind === 'tsconfig' || resolved.via?.kind === 'jsconfig'
+      ? { source: relativeRoot(root, resolved.via.file) }
+      : resolved.via?.kind === 'bundler-alias'
+        ? { source: resolved.via.find }
+        : undefined),
   }];
   if (resolved.kind === 'file' || resolved.kind === 'internal') {
     return {
@@ -815,45 +910,55 @@ function resolveRouteComponent(
   }
   return {
     unknown: {
-      reason: resolverLooksLikeAlias(binding.specifier) ? 'unresolved-alias' : 'missing-component',
+      reason: resolverLooksLikeAlias(binding.specifier) ? 'unresolved-alias' : 'resolution-failed',
       diagnostics: [`Unable to resolve component binding ${component.name} from ${relativeRoot(root, file)}.`],
       aliasSource: inferAliasSource(binding.specifier),
       specifier: binding.specifier,
+      recovery: {
+        action: 'fix-import-resolution',
+        cli: `depic targets suggest ${root}`,
+      },
     },
     confidence: 'low',
     evidence,
   };
 }
 
-function extractDynamicImportSpecifier(expr: any): string | undefined {
+function extractDynamicImportInfo(expr: any, source: string): { specifier?: string; expression: string } | undefined {
   if (!expr || typeof expr !== 'object') return undefined;
   if (expr.type === 'CallExpression' && expr.callee?.type === 'Import') {
     const arg = expr.arguments?.[0]?.expression;
-    return stringLiteralValue(arg);
+    return {
+      specifier: stringLiteralValue(arg),
+      expression: sliceNodeSource(source, arg) ?? sliceNodeSource(source, expr) ?? 'import(...)',
+    };
   }
   if (expr.type === 'ArrowFunctionExpression' || expr.type === 'FunctionExpression') {
-    return walkForDynamicImport(expr.body);
+    return walkForDynamicImport(expr.body, source);
   }
   if (expr.type === 'ParenthesisExpression') {
-    return extractDynamicImportSpecifier(expr.expression);
+    return extractDynamicImportInfo(expr.expression, source);
   }
   return undefined;
 }
 
-function walkForDynamicImport(node: any): string | undefined {
+function walkForDynamicImport(node: any, source: string): { specifier?: string; expression: string } | undefined {
   if (!node || typeof node !== 'object') return undefined;
   if (Array.isArray(node)) {
     for (const item of node) {
-      const found = walkForDynamicImport(item);
+      const found = walkForDynamicImport(item, source);
       if (found) return found;
     }
     return undefined;
   }
   if (node.type === 'CallExpression' && node.callee?.type === 'Import') {
-    return stringLiteralValue(node.arguments?.[0]?.expression);
+    return {
+      specifier: stringLiteralValue(node.arguments?.[0]?.expression),
+      expression: sliceNodeSource(source, node.arguments?.[0]?.expression) ?? sliceNodeSource(source, node) ?? 'import(...)',
+    };
   }
   for (const value of Object.values(node)) {
-    const found = walkForDynamicImport(value);
+    const found = walkForDynamicImport(value, source);
     if (found) return found;
   }
   return undefined;
@@ -1059,6 +1164,14 @@ function stringLiteralValue(node: any): string | undefined {
   return undefined;
 }
 
+function sliceNodeSource(source: string, node: any): string | undefined {
+  const span = node?.span;
+  if (!span || typeof span.start !== 'number' || typeof span.end !== 'number') return undefined;
+  const start = Math.max(0, span.start - 1);
+  const end = Math.max(start, span.end - 1);
+  return source.slice(start, end).trim();
+}
+
 function iterateRouteChildren(node: any): any[] {
   if (!node || typeof node !== 'object') return [];
   if (node.type === 'ArrayExpression') {
@@ -1194,11 +1307,26 @@ function dedupeTargets(targets: SuggestedTarget[]): SuggestedTarget[] {
   const byKey = new Map<string, SuggestedTarget>();
   for (const target of targets) {
     const key = target.kind === 'entry'
-      ? `entry:${target.id}:${target.file}:${target.symbol ?? ''}`
+      ? `entry:${target.id}`
       : `package:${target.id}:${target.package}`;
-    if (!byKey.has(key)) byKey.set(key, target);
+    const existing = byKey.get(key);
+    if (!existing || compareTargetPriority(target, existing) < 0) {
+      byKey.set(key, target);
+    }
   }
   return [...byKey.values()].sort(compareTargets);
+}
+
+function compareTargetPriority(a: SuggestedTarget, b: SuggestedTarget): number {
+  const priority = (target: SuggestedTarget): number => {
+    if (target.kind === 'entry') {
+      if (target.source === 'route-declaration') return 0;
+      if (target.source === 'file-route') return 1;
+      return 2;
+    }
+    return 0;
+  };
+  return priority(a) - priority(b);
 }
 
 function compareTargets(a: SuggestedTarget, b: SuggestedTarget): number {
@@ -1232,9 +1360,192 @@ function dedupeUnknown(unknown: UnknownCandidate[]): UnknownTargetSuggestion[] {
       diagnostics: item.diagnostics,
       ...(item.aliasSource ? { aliasSource: item.aliasSource } : {}),
       ...(item.specifier ? { specifier: item.specifier } : {}),
+      ...(item.expression ? { expression: item.expression } : {}),
+      ...(item.recovery ? { recovery: item.recovery } : {}),
     }));
 }
 
 function sortDiagnostics(diagnostics: TargetSuggestionDiagnostic[]): TargetSuggestionDiagnostic[] {
   return [...diagnostics].sort((a, b) => a.code.localeCompare(b.code) || a.message.localeCompare(b.message));
+}
+
+function buildTargetSuggestionState(
+  root: string,
+  targets: SuggestedTarget[],
+): import('./types.js').TargetSuggestionState {
+  const absoluteRoot = resolve(root);
+  const git = readGitState(absoluteRoot);
+  const ignore = readGitignoreState(absoluteRoot);
+  const config = readConfigState(absoluteRoot, targets);
+
+  return {
+    git,
+    ignore,
+    config,
+    confirmation: {
+      required: targets.length > 0 || config.existingState !== 'missing' || config.legacyPaths.length > 0,
+      action: 'confirm-proposal',
+    },
+  };
+}
+
+function readGitState(root: string): import('./types.js').TargetSuggestionState['git'] {
+  const isRepo = runGit(root, ['rev-parse', '--is-inside-work-tree']) === 'true';
+  if (!isRepo) {
+    return { isRepo: false, clean: true };
+  }
+  return {
+    isRepo: true,
+    branch: runGit(root, ['branch', '--show-current']) || undefined,
+    head: runGit(root, ['rev-parse', 'HEAD']) || undefined,
+    clean: (runGit(root, ['status', '--porcelain=v1', '--untracked-files=no']) ?? '').trim().length === 0,
+  };
+}
+
+function readGitignoreState(root: string): import('./types.js').TargetSuggestionState['ignore'] {
+  const gitignorePath = join(root, '.gitignore');
+  if (!existsSync(gitignorePath)) {
+    return { hasDepicRule: false, proposedDelta: ['add .depic/'] };
+  }
+  const lines = readFileSync(gitignorePath, 'utf-8').split(/\r?\n/);
+  const hasDepicRule = lines.some((line) => line.trim() === '.depic/');
+  const hasSelectiveRules = lines.some((line) => {
+    const trimmed = line.trim();
+    return trimmed === '.depic/*' || trimmed === '!.depic/impact-targets.json' || trimmed === '# Depic generated artifacts';
+  });
+  return {
+    hasDepicRule,
+    proposedDelta: hasDepicRule
+      ? []
+      : hasSelectiveRules
+        ? ['migrate selective .depic/* rules to .depic/']
+        : ['add .depic/'],
+  };
+}
+
+function readConfigState(
+  root: string,
+  targets: SuggestedTarget[],
+): import('./types.js').TargetSuggestionState['config'] {
+  const configPath = join(root, DEPIC_CONFIG_FILE);
+  let existing: Record<string, unknown> | undefined;
+  let existingState: 'missing' | 'present' | 'malformed' = 'missing';
+  if (existsSync(configPath)) {
+    try {
+      const loaded = loadDepicConfig(root);
+      existing = loaded ? JSON.parse(JSON.stringify(loaded)) as Record<string, unknown> : undefined;
+      existingState = 'present';
+    } catch {
+      existingState = 'malformed';
+    }
+  }
+
+  const legacy = loadLegacyTargetProposals(root);
+  const existingImpactTargets = extractImpactTargets(existing);
+  const mergedTargets = dedupeConfigTargets([
+    ...existingImpactTargets,
+    ...legacy.targets,
+    ...targets.map(targetToImpactTarget),
+  ]);
+
+  const mergedConfig = existing ? {
+    ...existing,
+    impact: {
+      ...(existing.impact && typeof existing.impact === 'object' ? existing.impact as Record<string, unknown> : {}),
+      targets: mergedTargets,
+    },
+  } : {
+    impact: { targets: mergedTargets },
+  };
+
+  return {
+    existingPath: existsSync(configPath) ? DEPIC_CONFIG_FILE : undefined,
+    existingState,
+    legacyPaths: legacy.paths,
+    mergedConfig,
+  };
+}
+
+function loadLegacyTargetProposals(root: string): { paths: string[]; targets: Array<Record<string, unknown>> } {
+  const paths = ['targets.json', 'impact-targets.json', join('.depic', 'impact-targets.json'), join('.depic', 'targets.json')];
+  const foundPaths: string[] = [];
+  const targets: Array<Record<string, unknown>> = [];
+
+  for (const path of paths) {
+    const absolute = join(root, path);
+    if (!existsSync(absolute)) continue;
+    foundPaths.push(path);
+    try {
+      const parsed = JSON.parse(readFileSync(absolute, 'utf-8')) as unknown;
+      targets.push(...extractTargetsFromLegacyPayload(parsed));
+    } catch {
+      // ignore malformed legacy payloads in the proposal, but keep the path visible
+    }
+  }
+
+  return { paths: foundPaths.sort(), targets };
+}
+
+function extractTargetsFromLegacyPayload(parsed: unknown): Array<Record<string, unknown>> {
+  if (Array.isArray(parsed)) {
+    return parsed.filter((item): item is Record<string, unknown> => Boolean(item) && typeof item === 'object' && !Array.isArray(item));
+  }
+  if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) return [];
+  const record = parsed as Record<string, unknown>;
+  const impact = record.impact;
+  if (impact && typeof impact === 'object' && !Array.isArray(impact)) {
+    const impactRecord = impact as Record<string, unknown>;
+    if (Array.isArray(impactRecord.targets)) {
+      return impactRecord.targets.filter((item): item is Record<string, unknown> => Boolean(item) && typeof item === 'object' && !Array.isArray(item));
+    }
+  }
+  if (Array.isArray(record.targets)) {
+    return record.targets.filter((item): item is Record<string, unknown> => Boolean(item) && typeof item === 'object' && !Array.isArray(item));
+  }
+  return [];
+}
+
+function extractImpactTargets(config: Record<string, unknown> | undefined): Array<Record<string, unknown>> {
+  if (!config) return [];
+  const impact = config.impact;
+  if (!impact || typeof impact !== 'object' || Array.isArray(impact)) return [];
+  const targets = (impact as Record<string, unknown>).targets;
+  if (!Array.isArray(targets)) return [];
+  return targets.filter((item): item is Record<string, unknown> => Boolean(item) && typeof item === 'object' && !Array.isArray(item));
+}
+
+function targetToImpactTarget(target: SuggestedTarget): Record<string, unknown> {
+  if (target.kind === 'entry') {
+    const result: Record<string, unknown> = { kind: 'entry', id: target.id, file: target.file };
+    if (target.symbol) result.symbol = target.symbol;
+    return result;
+  }
+  return { kind: 'package', id: target.id, package: target.package };
+}
+
+function dedupeConfigTargets(targets: Array<Record<string, unknown>>): Array<Record<string, unknown>> {
+  const byKey = new Map<string, Record<string, unknown>>();
+  for (const target of targets) {
+    const key = target.kind === 'entry'
+      ? `entry:${String(target.id ?? '')}:${String(target.file ?? '')}:${String(target.symbol ?? '')}`
+      : `package:${String(target.id ?? '')}:${String(target.package ?? '')}`;
+    if (!byKey.has(key)) byKey.set(key, target);
+  }
+  return [...byKey.values()].sort((a, b) =>
+    String(a.kind ?? '').localeCompare(String(b.kind ?? ''))
+    || String(a.id ?? '').localeCompare(String(b.id ?? ''))
+    || String(a.file ?? '').localeCompare(String(b.file ?? ''))
+    || String(a.package ?? '').localeCompare(String(b.package ?? '')),
+  );
+}
+
+function runGit(root: string, args: string[]): string | undefined {
+  const result = spawnSync('git', ['-C', root, ...args], { encoding: 'utf8' });
+  if (result.status !== 0) return undefined;
+  return result.stdout.trim();
+}
+
+function portableRootPath(root: string): string {
+  const rel = relative(process.cwd(), root).split(sep).join('/');
+  return rel || '.';
 }

@@ -33,8 +33,10 @@ export interface ImpactOptions extends AnalyzeOptions {
 export type ImpactKind = 'direct' | 'transitive' | 'global';
 
 export interface ImpactUnresolvedChange {
-  kind: 'deleted-file';
+  kind: 'deleted-file' | 'renamed-file';
   file: string;
+  oldPath?: string;
+  newPath?: string;
   status: 'unknown';
   reason:
     | 'baseline-required'
@@ -53,7 +55,8 @@ export interface ImpactUnresolvedChange {
       | 'restore-baseline-file'
       | 'fix-baseline-parse'
       | 'include-baseline-file'
-      | 'fix-baseline-targets';
+      | 'fix-baseline-targets'
+      | 'compare-rename-baseline';
     cli: string;
   };
 }
@@ -82,12 +85,20 @@ export interface ImpactDiagnostic {
     | 'deleted-file'
     | 'renamed-file'
     | 'unmapped-file'
+    | 'parse-failed'
+    | 'resolution-failed'
     | 'non-source-file'
     | 'excluded-changed-files'
     | 'semantic-noop'
     | 'chain-limit-reached';
   message: string;
   files?: string[];
+  reason?: string;
+  recovery?: {
+    action: string;
+    cli?: string;
+    config?: string;
+  };
   chainLimit?: ImpactChainLimitDetails;
 }
 

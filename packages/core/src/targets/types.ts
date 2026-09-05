@@ -50,6 +50,7 @@ export interface UnknownTargetSuggestion {
     | 'unresolved-alias'
     | 'dynamic-import'
     | 'non-static-path'
+    | 'resolution-failed'
     | 'malformed-manifest'
     | 'duplicate-package-name'
     | 'out-of-root'
@@ -62,6 +63,12 @@ export interface UnknownTargetSuggestion {
   diagnostics: string[];
   aliasSource?: string;
   specifier?: string;
+  expression?: string;
+  recovery?: {
+    action: string;
+    cli?: string;
+    config?: string;
+  };
 }
 
 export interface TargetSuggestionDiagnostic {
@@ -73,13 +80,47 @@ export interface TargetSuggestionDiagnostic {
     | 'unknown-route'
     | 'out-of-root'
     | 'symlink'
-    | 'unsupported-route-shape';
+    | 'unsupported-route-shape'
+    | 'parse-failed'
+    | 'resolution-failed'
+    | 'truncated';
   message: string;
   files?: string[];
+  reason?: string;
+  recovery?: {
+    action: string;
+    cli?: string;
+    config?: string;
+  };
+}
+
+export interface TargetSuggestionState {
+  git: {
+    isRepo: boolean;
+    branch?: string;
+    head?: string;
+    clean: boolean;
+  };
+  ignore: {
+    hasDepicRule: boolean;
+    proposedDelta: string[];
+  };
+  config: {
+    existingPath?: string;
+    existingState: 'missing' | 'present' | 'malformed';
+    legacyPaths: string[];
+    mergedConfig: Record<string, unknown>;
+  };
+  confirmation: {
+    required: boolean;
+    action: 'confirm-proposal';
+  };
 }
 
 export interface TargetSuggestionReport {
+  schemaVersion: 1;
   root: string;
+  state: TargetSuggestionState;
   targets: SuggestedTarget[];
   unknown: UnknownTargetSuggestion[];
   diagnostics: TargetSuggestionDiagnostic[];

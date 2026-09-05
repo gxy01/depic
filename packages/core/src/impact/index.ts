@@ -249,12 +249,29 @@ export async function analyzeImpact(options: ImpactOptions): Promise<ImpactRepor
       continue;
     }
     if (file.status === 'renamed') {
+      const oldPath = file.oldPath ?? file.path;
+      const renameRecovery = classifyUnresolvedRename(
+        file.path,
+        oldPath,
+        options.baselineRoot,
+        baselineRoot,
+        baselineGraph,
+      );
       diagnostics.push({
         level: 'warning',
         code: 'renamed-file',
-        message: `Renamed destination ${file.path} is analyzed conservatively using the head dependency graph; consumers of the old path ${file.oldPath ?? '(unknown)'} require a baseline dependency graph for precise impact analysis.`,
+        message: `Renamed file ${oldPath} -> ${file.path} requires baseline comparison for old-path consumers; ${renameRecovery.recovery.action}.`,
         files: [file.path],
+        reason: renameRecovery.reason,
+        recovery: renameRecovery.recovery,
       });
+      unresolvedChanges.push(renameRecovery);
+      if (baselineRoot) {
+        const baselinePath = toAbsoluteGitPath(baselineRoot, oldPath);
+        if (baselineGraph && baselineGraph.getFileNode(baselinePath)) {
+          baselineChangedFiles.add(baselinePath);
+        }
+      }
     }
     if (globalChangedFiles.includes(file.path)) {
       changedFiles.push(file.path);
@@ -435,7 +452,7 @@ export async function analyzeImpact(options: ImpactOptions): Promise<ImpactRepor
   }
 
   return {
-    analysisStatus: hasIncompleteCoverage(diagnostics) ? 'incomplete' : 'complete',
+    analysisStatus: hasIncompleteCoverage(diagnostics) || reportTruncated || stableUnresolvedChanges.length > 0 ? 'incomplete' : 'complete',
     totalTargetCount: targets.length,
     impactedTargetCount: impacts.length,
     changedFiles: stableReportChangedFiles,
@@ -463,7 +480,10 @@ function hasIncompleteCoverage(diagnostics: ImpactDiagnostic[]): boolean {
     || item.code === 'deleted-file'
     || item.code === 'renamed-file'
     || item.code === 'unmapped-file'
+    || item.code === 'parse-failed'
+    || item.code === 'resolution-failed'
     || item.code === 'excluded-changed-files'
+    || item.code === 'chain-limit-reached'
   ));
 }
 
@@ -481,13 +501,39 @@ function classifyUnmappedFile(
     ...configuredExtensions,
   ].map(normalizeExtension));
   const sourceLike = sourceExtensions.has(extname(file).toLowerCase());
+  let parseError: string | undefined;
+  if (sourceLike || expectedByDiscovery) {
+    try {
+      parseFile(readFileSync(absolutePath, 'utf8'), absolutePath);
+    } catch (error) {
+      parseError = error instanceof Error ? error.message : String(error);
+    }
+  }
+
+  if (parseError) {
+    return {
+      level: 'warning',
+      code: 'parse-failed',
+      message: `Changed source or analysis-included file ${file} could not be parsed and was not mapped into the dependency graph.`,
+      files: [file],
+      reason: parseError,
+      recovery: {
+        action: 'fix-parse-error',
+        cli: `depic impact --diff <diff> --targets <targets.json>`,
+      },
+    };
+  }
 
   if (expectedByDiscovery || sourceLike) {
     return {
       level: 'warning',
-      code: 'unmapped-file',
-      message: `Changed source or analysis-included file ${file} is not present in the dependency graph; check discovery configuration and parse/resolution failures.`,
+      code: 'resolution-failed',
+      message: `Changed source or analysis-included file ${file} is not present in the dependency graph; check discovery configuration and resolution fallbacks.`,
       files: [file],
+      recovery: {
+        action: 'fix-resolution-failure',
+        cli: `depic impact --diff <diff> --targets <targets.json>`,
+      },
     };
   }
 
@@ -496,6 +542,88 @@ function classifyUnmappedFile(
     code: 'non-source-file',
     message: `Changed non-source file ${file} is outside the analyzed dependency graph; it was retained for visibility but does not propagate impact.`,
     files: [file],
+  };
+}
+
+function classifyUnresolvedRename(
+  newPath: string,
+  oldPath: string,
+  baselineRootOption: string | undefined,
+  baselineRoot: string | undefined,
+  baselineGraph: DependencyGraph | undefined,
+): ImpactUnresolvedChange {
+  if (!baselineRootOption) {
+    return {
+      kind: 'renamed-file',
+      file: newPath,
+      oldPath,
+      newPath,
+      status: 'unknown',
+      reason: 'baseline-required',
+      recovery: {
+        action: 'compare-rename-baseline',
+        cli: `--baseline-root ${shellQuote('/path/to/baseline-checkout')}`,
+      },
+    };
+  }
+
+  if (!baselineRoot || !baselineGraph) {
+    return {
+      kind: 'renamed-file',
+      file: newPath,
+      oldPath,
+      newPath,
+      status: 'unknown',
+      reason: baselineRoot ? 'baseline-analysis-failed' : 'baseline-root-unavailable',
+      recovery: {
+        action: baselineRoot ? 'fix-baseline-analysis' : 'fix-baseline-root',
+        cli: `--baseline-root ${shellQuote(baselineRootOption)}`,
+      },
+    };
+  }
+
+  const baselinePath = toAbsoluteGitPath(baselineRoot, oldPath);
+  if (!existsSync(baselinePath)) {
+    return {
+      kind: 'renamed-file',
+      file: newPath,
+      oldPath,
+      newPath,
+      status: 'unknown',
+      reason: 'baseline-file-missing',
+      recovery: {
+        action: 'restore-baseline-file',
+        cli: `--baseline-root ${shellQuote(baselineRootOption)}`,
+      },
+    };
+  }
+
+  if (!baselineGraph.getFileNode(baselinePath)) {
+    return {
+      kind: 'renamed-file',
+      file: newPath,
+      oldPath,
+      newPath,
+      status: 'unknown',
+      reason: 'baseline-file-unmapped',
+      recovery: {
+        action: 'include-baseline-file',
+        cli: `--baseline-root ${shellQuote(baselineRootOption)}`,
+      },
+    };
+  }
+
+  return {
+    kind: 'renamed-file',
+    file: newPath,
+    oldPath,
+    newPath,
+    status: 'unknown',
+    reason: 'baseline-targets-unmapped',
+    recovery: {
+      action: 'fix-baseline-targets',
+      cli: `--baseline-root ${shellQuote(baselineRootOption)}`,
+    },
   };
 }
 

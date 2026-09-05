@@ -1,9 +1,16 @@
 /** 解析目标 */
 export type ResolvedTarget =
-  | { kind: 'file'; path: string }
-  | { kind: 'external'; name: string }
-  | { kind: 'internal'; name: string; path: string }
-  | { kind: 'unresolved'; specifier: string };
+  | { kind: 'file'; path: string; via?: ResolveSource }
+  | { kind: 'external'; name: string; via?: ResolveSource }
+  | { kind: 'internal'; name: string; path: string; via?: ResolveSource }
+  | { kind: 'unresolved'; specifier: string; via?: ResolveSource };
+
+export type ResolveSource =
+  | { kind: 'relative' }
+  | { kind: 'tsconfig'; file: string }
+  | { kind: 'jsconfig'; file: string }
+  | { kind: 'bundler-alias'; file?: string; find?: string }
+  | { kind: 'workspace'; file?: string };
 
 /** Resolver 配置 */
 export interface ResolveOptions {

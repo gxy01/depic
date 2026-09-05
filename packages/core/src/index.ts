@@ -42,6 +42,7 @@ export type {
   SuggestedTarget,
   TargetEvidence,
   TargetSuggestionDiagnostic,
+  TargetSuggestionState,
   TargetSuggestionReport,
   UnknownTargetSuggestion,
   TargetConfidence,

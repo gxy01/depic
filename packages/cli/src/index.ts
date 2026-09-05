@@ -88,6 +88,15 @@ export async function runImpact(
     if (diagnostic.code === 'unmapped-file') {
       lines.push(`Unmapped source/analysis files (warning): ${diagnostic.files?.join(', ')}`);
     }
+    if (diagnostic.code === 'parse-failed') {
+      lines.push(`Parse-failed source files (warning): ${diagnostic.files?.join(', ')}`);
+      if (diagnostic.reason) {
+        lines.push(`Parse reason: ${diagnostic.reason}`);
+      }
+    }
+    if (diagnostic.code === 'resolution-failed') {
+      lines.push(`Resolution-failed source files (warning): ${diagnostic.files?.join(', ')}`);
+    }
     if (diagnostic.code === 'chain-limit-reached' && diagnostic.chainLimit) {
       const detail = diagnostic.chainLimit;
       lines.push(`Truncated target ${detail.targetId}: returned ${detail.returnedChainCount} / at least ${detail.knownMinimumChainCount} chains (limits: per-target=${detail.maxChainsPerTarget}, total=${detail.maxTotalChains}).`);

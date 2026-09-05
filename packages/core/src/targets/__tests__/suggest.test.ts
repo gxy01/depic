@@ -31,6 +31,9 @@ describe('suggestTargets', () => {
       '@fixture/core',
       '@fixture/web',
     ]);
+    expect(report.schemaVersion).toBe(1);
+    expect(report.state.config.existingState).toBe('missing');
+    expect(report.state.ignore.hasDepicRule).toBe(false);
     expect(report.unknown).toEqual([]);
   });
 
@@ -58,6 +61,7 @@ describe('suggestTargets', () => {
     expect(normalized).toContainEqual({ id: '/', file: 'src/app/page.tsx' });
     expect(normalized).toContainEqual({ id: '/blog', file: 'src/app/blog/page.tsx' });
     expect(normalized).toContainEqual({ id: '/lazy', file: 'src/features/LazyPage.tsx' });
+    expect(normalized).not.toContainEqual({ id: '/HomePage', file: 'src/app/page.tsx' });
     expect(JSON.stringify(report)).toBe(JSON.stringify(await suggestTargets(root)));
   });
 
@@ -73,9 +77,31 @@ describe('suggestTargets', () => {
     expect(report.unknown).toEqual(expect.arrayContaining([
       expect.objectContaining({
         id: '/missing',
-        reason: expect.stringMatching(/unresolved-alias|dynamic-import/),
+        reason: expect.stringMatching(/unresolved-alias|dynamic-import|resolution-failed|non-static-path/),
         specifier: '@/missing/Page',
+        recovery: expect.objectContaining({
+          action: expect.any(String),
+        }),
       }),
     ]));
+  });
+
+  it('records config and gitignore proposal state deterministically', async () => {
+    writeFileSync(join(root, 'depic.config.json'), JSON.stringify({
+      impact: { targets: [{ kind: 'entry', id: '/', file: 'src/app/page.tsx' }] },
+    }));
+    writeFileSync(join(root, '.gitignore'), 'node_modules/\n');
+    const report = await suggestTargets(root);
+
+    expect(report.state.config.existingState).toBe('present');
+    expect(report.state.config.existingPath).toBe('depic.config.json');
+    expect(report.state.ignore.proposedDelta).toContain('add .depic/');
+    expect(report.state.config.mergedConfig).toMatchObject({
+      impact: {
+        targets: expect.arrayContaining([
+          expect.objectContaining({ kind: 'entry', id: '/' }),
+        ]),
+      },
+    });
   });
 });
