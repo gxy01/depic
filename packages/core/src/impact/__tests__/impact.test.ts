@@ -99,10 +99,20 @@ describe('analyzeImpact', () => {
         'src/utils/new-helper.ts',
       ]],
     })]);
+    expect(report.unresolvedChanges).toEqual([expect.objectContaining({
+      kind: 'renamed-file',
+      file: 'src/utils/new-helper.ts',
+      oldPath: 'src/utils/old-helper.ts',
+      newPath: 'src/utils/new-helper.ts',
+      reason: expect.stringMatching(/baseline-|compare-rename-baseline/),
+      recovery: expect.objectContaining({
+        action: expect.any(String),
+      }),
+    })]);
     expect(report.diagnostics).toContainEqual(expect.objectContaining({
       code: 'renamed-file',
       files: ['src/utils/new-helper.ts'],
-      message: expect.stringMatching(/head dependency graph.*old-helper\.ts.*baseline dependency graph/),
+      message: expect.stringMatching(/renamed file.*old-helper\.ts.*new-helper\.ts.*baseline comparison/i),
     }));
     expect(report.symbolEvidence).toContainEqual(expect.objectContaining({
       targetId: '/renamed',

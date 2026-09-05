@@ -5,7 +5,7 @@ import {
   readdirSync,
 } from 'node:fs';
 import { resolve, dirname, extname, join, normalize } from 'node:path';
-import type { ResolveOptions, ResolvedTarget } from './types.js';
+import type { AliasEntry, ResolveOptions, ResolvedTarget, ResolveSource } from './types.js';
 
 export const DEFAULT_RESOLVE_EXTENSIONS = ['.ts', '.tsx', '.js', '.jsx'];
 
@@ -14,25 +14,35 @@ interface TsconfigPaths {
   patterns: { prefix: string; replacements: string[] }[];
 }
 
-interface WorkspaceEntry {
-  name: string;
-  entry: string;
+interface TsconfigCandidate {
+  file: string;
+  kind: 'tsconfig' | 'jsconfig';
+  paths: TsconfigPaths;
 }
 
 export class Resolver {
   private root: string;
   private extensions: string[];
-  private tsconfigPathsCache = new Map<string, TsconfigPaths | null>();
+  private tsconfigPathsCache = new Map<string, TsconfigCandidate | null>();
   private workspaceMap: Map<string, string> = new Map();
+  private aliases: AliasEntry[];
+  private aliasSourceByFind = new Map<string, string | undefined>();
 
   constructor(options: ResolveOptions) {
     this.root = options.root;
     this.extensions = options.extensions ?? DEFAULT_RESOLVE_EXTENSIONS;
+    this.aliases = [...(options.aliases ?? [])].sort((a, b) => b.find.length - a.find.length);
 
     // 预加载显式指定的 tsconfig
     if (options.tsconfigPath) {
       const paths = this.loadTsconfigPaths(options.tsconfigPath);
-      this.tsconfigPathsCache.set(dirname(options.tsconfigPath), paths);
+      this.tsconfigPathsCache.set(options.tsconfigPath, paths
+        ? {
+            file: options.tsconfigPath,
+            kind: options.tsconfigPath.endsWith('jsconfig.json') ? 'jsconfig' : 'tsconfig',
+            paths,
+          }
+        : null);
     }
 
     // 扫描 workspace
@@ -47,38 +57,36 @@ export class Resolver {
   resolve(specifier: string, fromFile: string): ResolvedTarget {
     // 1. 相对路径
     if (specifier.startsWith('.')) {
-      return this.resolveRelative(specifier, fromFile);
+      const resolved = this.resolveRelative(specifier, fromFile);
+      if (resolved) return resolved;
     }
 
-    // 2. tsconfig paths 别名 — 从 fromFile 向上查找最近的 tsconfig
-    const tsconfigPaths = this.getTsconfigForFile(fromFile);
-    if (tsconfigPaths) {
-      const result = this.resolveTsconfigPath(specifier, tsconfigPaths);
-      if (result) return result;
-    }
+    // 2. tsconfig/jsconfig paths — nearest first, then outward.
+    const tsconfigCandidates = this.getTsconfigCandidates(fromFile);
+    const tsconfigResult = this.resolveTsconfigPath(specifier, tsconfigCandidates);
+    if (tsconfigResult) return tsconfigResult;
 
-    // 3. workspace 内部包
+    // 3. bundler alias
+    const aliased = this.resolveAlias(specifier);
+    if (aliased) return aliased;
+
+    // 4. workspace 内部包
     if (this.workspaceMap.has(specifier)) {
-      return {
+      return attachResolveSource({
         kind: 'internal',
         name: specifier,
         path: this.workspaceMap.get(specifier)!,
-      };
+      }, { kind: 'workspace' });
     }
 
-    // 4. 外部包（裸 specifier，不以 . 或 / 开头）
+    // 5. 外部包（裸 specifier，不以 . 或 / 开头）
+    if (isPathLikeAlias(specifier)) {
+      return { kind: 'unresolved', specifier };
+    }
     return { kind: 'external', name: specifier };
   }
 
   // ─── tsconfig ───────────────────────────────────────────────
-
-  private findTsconfig(dir: string): string | null {
-    const candidate = join(dir, 'tsconfig.json');
-    if (existsSync(candidate)) return candidate;
-    const parent = dirname(dir);
-    if (parent === dir) return null; // reached root
-    return this.findTsconfig(parent);
-  }
 
   private loadTsconfigPaths(tsconfigPath: string): TsconfigPaths | null {
     try {
@@ -114,73 +122,60 @@ export class Resolver {
   }
 
   /**
-   * 从 fromFile 向上查找最近的 tsconfig.json，加载并缓存 paths。
+   * 从 fromFile 向上查找所有可用的 tsconfig.json / jsconfig.json，按最近优先返回。
    */
-  private getTsconfigForFile(fromFile: string): TsconfigPaths | null {
-    const dir = dirname(fromFile);
-    // 检查缓存
-    for (const [cachedDir, cached] of this.tsconfigPathsCache) {
-      if (dir.startsWith(cachedDir)) {
-        // 查找更近的 tsconfig
-        const closer = this.findTsconfigInDir(dir, cachedDir);
-        if (closer) return closer;
-        return cached;
-      }
-    }
-    // 未命中缓存：从文件目录向上查找
-    const tsconfigPath = this.findTsconfig(dir);
-    if (tsconfigPath) {
-      const paths = this.loadTsconfigPaths(tsconfigPath);
-      const tsconfigDir = dirname(tsconfigPath);
-      this.tsconfigPathsCache.set(tsconfigDir, paths);
-      return paths;
-    }
-    this.tsconfigPathsCache.set(dir, null);
-    return null;
-  }
+  private getTsconfigCandidates(fromFile: string): TsconfigCandidate[] {
+    const start = dirname(fromFile);
+    const seen = new Set<string>();
+    const candidates: TsconfigCandidate[] = [];
+    let dir = start;
 
-  /**
-   * 在 startDir 到 stopDir 之间查找 tsconfig（用于发现嵌套 tsconfig）。
-   */
-  private findTsconfigInDir(
-    startDir: string,
-    stopDir: string,
-  ): TsconfigPaths | null {
-    let dir = startDir;
-    while (dir.length >= stopDir.length && dir.startsWith(stopDir)) {
-      const candidate = join(dir, 'tsconfig.json');
-      if (existsSync(candidate)) {
-        // 如果就是已缓存的，跳过
-        for (const [cachedDir] of this.tsconfigPathsCache) {
-          if (candidate === join(cachedDir, 'tsconfig.json')) return null;
+    while (true) {
+      const pair: Array<{ file: string; kind: 'tsconfig' | 'jsconfig' }> = [
+        { file: join(dir, 'tsconfig.json'), kind: 'tsconfig' },
+        { file: join(dir, 'jsconfig.json'), kind: 'jsconfig' },
+      ];
+      for (const candidate of pair) {
+        if (seen.has(candidate.file) || !existsSync(candidate.file)) continue;
+        seen.add(candidate.file);
+        const cached = this.tsconfigPathsCache.get(candidate.file);
+        if (cached === null) continue;
+        if (cached) {
+          candidates.push(cached);
+          continue;
         }
-        const paths = this.loadTsconfigPaths(candidate);
-        if (paths) {
-          this.tsconfigPathsCache.set(dir, paths);
-          return paths;
-        }
+        const paths = this.loadTsconfigPaths(candidate.file);
+        const record = paths
+          ? { file: candidate.file, kind: candidate.kind, paths }
+          : null;
+        this.tsconfigPathsCache.set(candidate.file, record);
+        if (record) candidates.push(record);
       }
-      dir = dirname(dir);
+      const parent = dirname(dir);
+      if (parent === dir) break;
+      dir = parent;
     }
-    return null;
+
+    return candidates;
   }
 
   private resolveTsconfigPath(
     specifier: string,
-    tsconfigPaths: TsconfigPaths,
+    candidates: TsconfigCandidate[],
   ): ResolvedTarget | null {
-    const { patterns } = tsconfigPaths;
-    for (const { prefix, replacements } of patterns) {
-      if (!specifier.startsWith(prefix)) continue;
+    for (const candidate of candidates) {
+      for (const { prefix, replacements } of candidate.paths.patterns) {
+        if (!specifier.startsWith(prefix)) continue;
 
-      const remainder = specifier.slice(prefix.length);
-      for (const repl of replacements) {
-        const candidate = repl + remainder;
-        const resolved = this.tryResolveFile(candidate);
-        if (resolved) return resolved;
+        const remainder = specifier.slice(prefix.length);
+        for (const repl of replacements) {
+          const candidatePath = repl + remainder;
+          const resolved = this.tryResolveFile(candidatePath);
+          if (resolved) {
+            return attachResolveSource(resolved, { kind: candidate.kind, file: candidate.file });
+          }
+        }
       }
-      // 前缀匹配了但文件没找到 → unresolved（不继续尝试其他解析策略）
-      return { kind: 'unresolved', specifier };
     }
     return null;
   }
@@ -190,14 +185,38 @@ export class Resolver {
   private resolveRelative(
     specifier: string,
     fromFile: string,
-  ): ResolvedTarget {
+  ): ResolvedTarget | null {
     const fromDir = dirname(fromFile);
     const absPath = resolve(fromDir, specifier);
 
     const resolved = this.tryResolveFile(absPath);
-    if (resolved) return resolved;
+    if (resolved) return attachResolveSource(resolved, { kind: 'relative' });
+    return null;
+  }
 
-    return { kind: 'unresolved', specifier };
+  private resolveAlias(specifier: string): ResolvedTarget | null {
+    for (const alias of this.aliases) {
+      if (!this.matchesAlias(specifier, alias.find)) continue;
+      const remainder = specifier === alias.find
+        ? ''
+        : specifier.slice(alias.find.length).replace(/^\//, '');
+      const candidate = this.toAbsoluteAliasPath(alias.replacement, remainder);
+      const resolved = this.tryResolveFile(candidate);
+      if (resolved) {
+        return attachResolveSource(resolved, { kind: 'bundler-alias', find: alias.find });
+      }
+      return attachResolveSource({ kind: 'unresolved' as const, specifier }, { kind: 'bundler-alias', find: alias.find });
+    }
+    return null;
+  }
+
+  private matchesAlias(specifier: string, find: string): boolean {
+    return specifier === find || specifier.startsWith(`${find}/`);
+  }
+
+  private toAbsoluteAliasPath(replacement: string, remainder: string): string {
+    const base = resolve(this.root, replacement);
+    return remainder ? join(base, remainder) : base;
   }
 
   /**
@@ -310,4 +329,18 @@ export class Resolver {
       // skip malformed package.json
     }
   }
+}
+
+function attachResolveSource<T extends object>(target: T, via: ResolveSource): T & { via: ResolveSource } {
+  Object.defineProperty(target, 'via', {
+    value: via,
+    enumerable: false,
+    configurable: true,
+    writable: true,
+  });
+  return target as T & { via: ResolveSource };
+}
+
+function isPathLikeAlias(specifier: string): boolean {
+  return specifier.startsWith('@/') || specifier.startsWith('~/') || specifier.startsWith('#/');
 }
