@@ -501,6 +501,26 @@ function classifyUnmappedFile(
     ...configuredExtensions,
   ].map(normalizeExtension));
   const sourceLike = sourceExtensions.has(extname(file).toLowerCase());
+  if (!existsSync(absolutePath) && (expectedByDiscovery || sourceLike)) {
+    return {
+      level: 'warning',
+      code: 'resolution-failed',
+      message: `Changed source or analysis-included file ${file} is not present in the dependency graph; check discovery configuration and resolution fallbacks.`,
+      files: [file],
+      recovery: {
+        action: 'fix-resolution-failure',
+        cli: `depic impact --diff <diff> --targets <targets.json>`,
+      },
+    };
+  }
+  if (!existsSync(absolutePath)) {
+    return {
+      level: 'info',
+      code: 'non-source-file',
+      message: `Changed non-source file ${file} is outside the analyzed dependency graph; it was retained for visibility but does not propagate impact.`,
+      files: [file],
+    };
+  }
   let parseError: string | undefined;
   if (sourceLike || expectedByDiscovery) {
     try {

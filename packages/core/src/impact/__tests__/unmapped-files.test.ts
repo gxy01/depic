@@ -51,21 +51,21 @@ describe('unmapped changed-file classification (issue #35)', () => {
     {
       name: 'unmapped TypeScript source',
       file: 'src/missing.ts',
-      code: 'unmapped-file',
+      code: 'resolution-failed',
       level: 'warning',
     },
     {
       name: 'custom resolver extension',
       file: 'src/component.vue',
       analysis: { extensions: ['.vue'] },
-      code: 'unmapped-file',
+      code: 'resolution-failed',
       level: 'warning',
     },
     {
       name: 'custom include without a source-like extension',
       file: 'docs/guides/guide.md',
       analysis: { include: ['**/*.ts', 'docs/**/*.md'] },
-      code: 'unmapped-file',
+      code: 'resolution-failed',
       level: 'warning',
     },
     {
@@ -79,7 +79,7 @@ describe('unmapped changed-file classification (issue #35)', () => {
       name: 'excluded TypeScript source remains prominent',
       file: 'src/generated/missing.ts',
       analysis: { exclude: ['src/generated/**'] },
-      code: 'unmapped-file',
+      code: 'resolution-failed',
       level: 'warning',
     },
   ])('classifies $name', async ({ file, analysis, code, level }) => {
@@ -97,6 +97,7 @@ describe('unmapped changed-file classification (issue #35)', () => {
   });
 
   it('uses effective extensions loaded from depic.config.json', async () => {
+    writeFileSync(join(root, 'src/missing.vue'), 'export default 1;');
     writeFileSync(join(root, 'depic.config.json'), JSON.stringify({
       extensions: ['vue'],
       impact: { targets: [{ kind: 'entry', id: 'page', file: 'src/page.ts' }] },
@@ -108,7 +109,7 @@ describe('unmapped changed-file classification (issue #35)', () => {
     });
 
     expect(report.diagnostics).toEqual([expect.objectContaining({
-      code: 'unmapped-file',
+      code: 'resolution-failed',
       level: 'warning',
       files: ['src/missing.vue'],
     })]);
@@ -132,7 +133,7 @@ describe('unmapped changed-file classification (issue #35)', () => {
     });
 
     expect(report.diagnostics).toEqual([expect.objectContaining({
-      code: 'unmapped-file',
+      code: file === 'src/broken.ts' ? 'parse-failed' : 'resolution-failed',
       level: 'warning',
       files: [file],
     })]);

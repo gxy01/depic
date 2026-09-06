@@ -980,5 +980,6 @@ Current work on the same PR #45 is aligned to the single acceptance ledger and k
 - Resolver precedence now prefers the nearest tsconfig/jsconfig search before bundler aliases, while preserving source metadata on the winning resolution path for evidence.
 - Route discovery now prefers route-declaration candidates over duplicate file-route candidates for the same file, and unresolved lazy/component cases keep structured reason/recovery details instead of collapsing to generic unknown.
 - Impact reporting now records rename uncertainty with old/new paths and baseline recovery, and truncation is treated as incomplete coverage rather than a complete report.
+- Follow-up CI repair: relative missing imports and directory imports stay `kind=unresolved`; non-source changed files remain info-only, while source-like missing files and parse failures split into `resolution-failed` / `parse-failed` with recovery details.
 
 Remaining work in this retest cycle is confined to verification: rerun the focused target-suggestion, resolver, and impact matrices; confirm the JSON stays byte-stable; then refresh the PR #45 ledger entry with the final pass/fail counts and any residual gaps. No second summary file is being created.

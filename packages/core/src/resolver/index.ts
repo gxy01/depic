@@ -57,8 +57,7 @@ export class Resolver {
   resolve(specifier: string, fromFile: string): ResolvedTarget {
     // 1. 相对路径
     if (specifier.startsWith('.')) {
-      const resolved = this.resolveRelative(specifier, fromFile);
-      if (resolved) return resolved;
+      return this.resolveRelative(specifier, fromFile) ?? { kind: 'unresolved', specifier };
     }
 
     // 2. tsconfig/jsconfig paths — nearest first, then outward.
