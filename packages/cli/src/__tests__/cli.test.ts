@@ -541,7 +541,7 @@ rename to new-helper.ts
 
     const output = await runImpact(tmpDir, diff, undefined, report);
 
-    expect(output).toContain('Parse-failed source files (warning): missing.ts');
+    expect(output).toContain('Resolution-failed source files (warning): missing.ts');
     expect(output).toContain('Diagnostics: 1 warning(s), 0 info');
   });
 
