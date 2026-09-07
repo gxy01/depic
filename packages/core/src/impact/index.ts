@@ -253,19 +253,35 @@ export async function analyzeImpact(options: ImpactOptions): Promise<ImpactRepor
       const renameRecovery = classifyUnresolvedRename(
         file.path,
         oldPath,
+        root,
+        graph,
         options.baselineRoot,
         baselineRoot,
         baselineGraph,
       );
-      diagnostics.push({
-        level: 'warning',
-        code: 'renamed-file',
-        message: `Renamed file ${oldPath} -> ${file.path} requires baseline comparison for old-path consumers; ${renameRecovery.recovery.action}.`,
-        files: [file.path],
-        reason: renameRecovery.reason,
-        recovery: renameRecovery.recovery,
-      });
-      unresolvedChanges.push(renameRecovery);
+      if (renameRecovery) {
+        diagnostics.push({
+          level: 'warning',
+          code: 'renamed-file',
+          message: `Renamed file ${oldPath} -> ${file.path} requires baseline comparison for old-path consumers; ${renameRecovery.recovery.action}.`,
+          files: [file.path],
+          reason: renameRecovery.reason,
+          recovery: renameRecovery.recovery,
+        });
+        unresolvedChanges.push(renameRecovery);
+      } else {
+        diagnostics.push({
+          level: 'info',
+          code: 'renamed-file',
+          message: `Renamed file ${oldPath} -> ${file.path} is covered by mixed head/baseline comparison and does not require a fallback recovery.`,
+          files: [file.path],
+          reason: 'comparison-covered',
+          recovery: {
+            action: 'compare-rename-baseline',
+            cli: `--baseline-root ${shellQuote(options.baselineRoot ?? '/path/to/baseline-checkout')}`,
+          },
+        });
+      }
       if (baselineRoot) {
         const baselinePath = toAbsoluteGitPath(baselineRoot, oldPath);
         if (baselineGraph && baselineGraph.getFileNode(baselinePath)) {
@@ -568,10 +584,12 @@ function classifyUnmappedFile(
 function classifyUnresolvedRename(
   newPath: string,
   oldPath: string,
+  root: string,
+  graph: DependencyGraph,
   baselineRootOption: string | undefined,
   baselineRoot: string | undefined,
   baselineGraph: DependencyGraph | undefined,
-): ImpactUnresolvedChange {
+): ImpactUnresolvedChange | undefined {
   if (!baselineRootOption) {
     return {
       kind: 'renamed-file',
@@ -603,6 +621,10 @@ function classifyUnresolvedRename(
   }
 
   const baselinePath = toAbsoluteGitPath(baselineRoot, oldPath);
+  const newAbsolutePath = toAbsoluteGitPath(root, newPath);
+  if (graph.getFileNode(newAbsolutePath) && baselineGraph.getFileNode(baselinePath)) {
+    return undefined;
+  }
   if (!existsSync(baselinePath)) {
     return {
       kind: 'renamed-file',

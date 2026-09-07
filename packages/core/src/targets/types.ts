@@ -103,7 +103,7 @@ export interface TargetSuggestionState {
   };
   ignore: {
     hasDepicRule: boolean;
-    proposedDelta: string[];
+    proposedDelta?: string[];
   };
   config: {
     existingPath?: string;

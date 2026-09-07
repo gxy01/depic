@@ -254,6 +254,11 @@ function discoverWorkspacePackages(
         code: 'malformed-manifest',
         message: `Unable to read workspace package manifest ${manifestRel}: ${manifest.error}`,
         files: [manifestRel],
+        reason: manifest.error,
+        recovery: {
+          action: 'fix-workspace-manifest',
+          cli: `depic targets suggest ${root}`,
+        },
       });
       state.unknown.push({
         kind: 'unknown',
@@ -263,6 +268,10 @@ function discoverWorkspacePackages(
         file: manifestRel,
         evidence,
         diagnostics: [`Unable to parse ${manifestRel}: ${manifest.error}`],
+        recovery: {
+          action: 'fix-workspace-manifest',
+          cli: `depic targets suggest ${root}`,
+        },
       });
       continue;
     }
@@ -273,6 +282,10 @@ function discoverWorkspacePackages(
         code: 'malformed-manifest',
         message: `Workspace package ${manifestRel} does not declare a package name.`,
         files: [manifestRel],
+        recovery: {
+          action: 'add-workspace-package-name',
+          cli: `depic targets suggest ${root}`,
+        },
       });
       state.unknown.push({
         kind: 'unknown',
@@ -282,6 +295,10 @@ function discoverWorkspacePackages(
         file: manifestRel,
         evidence,
         diagnostics: [`${manifestRel} is missing a package.json name.`],
+        recovery: {
+          action: 'add-workspace-package-name',
+          cli: `depic targets suggest ${root}`,
+        },
       });
       continue;
     }
@@ -293,6 +310,10 @@ function discoverWorkspacePackages(
         code: 'out-of-root',
         message: `Workspace package ${manifestRel} resolves outside the project root and will be ignored.`,
         files: [manifestRel],
+        recovery: {
+          action: 'move-workspace-package-under-root',
+          cli: `depic targets suggest ${root}`,
+        },
       });
       state.unknown.push({
         kind: 'unknown',
@@ -302,6 +323,10 @@ function discoverWorkspacePackages(
         file: manifestRel,
         evidence,
         diagnostics: [`${manifestRel} resolves to ${manifestReal}, outside ${root}`],
+        recovery: {
+          action: 'move-workspace-package-under-root',
+          cli: `depic targets suggest ${root}`,
+        },
       });
       continue;
     }
@@ -312,6 +337,10 @@ function discoverWorkspacePackages(
         code: 'symlink',
         message: `Workspace package ${manifestRel} is a symlink and will be treated conservatively.`,
         files: [manifestRel],
+        recovery: {
+          action: 'replace-workspace-symlink',
+          cli: `depic targets suggest ${root}`,
+        },
       });
       state.unknown.push({
         kind: 'unknown',
@@ -321,6 +350,10 @@ function discoverWorkspacePackages(
         file: manifestRel,
         evidence,
         diagnostics: [`${manifestRel} is a symlink.`],
+        recovery: {
+          action: 'replace-workspace-symlink',
+          cli: `depic targets suggest ${root}`,
+        },
       });
       continue;
     }
@@ -332,6 +365,10 @@ function discoverWorkspacePackages(
         code: 'duplicate-package-name',
         message: `Workspace package name ${manifest.name} appears more than once; keeping the first declaration.`,
         files: [existing.evidence[1]?.file ?? existing.package, manifestRel],
+        recovery: {
+          action: 'dedupe-workspace-package-names',
+          cli: `depic targets suggest ${root}`,
+        },
       });
       state.unknown.push({
         kind: 'unknown',
@@ -341,6 +378,10 @@ function discoverWorkspacePackages(
         file: manifestRel,
         evidence,
         diagnostics: [`Duplicate package name ${manifest.name} already discovered at ${existing.evidence[1]?.file ?? existing.package}.`],
+        recovery: {
+          action: 'dedupe-workspace-package-names',
+          cli: `depic targets suggest ${root}`,
+        },
       });
       continue;
     }
@@ -518,6 +559,8 @@ function discoverRouteDeclarations(
   const files = walkSourceFiles(root);
   for (const file of files) {
     const source = readFileSync(file, 'utf-8');
+    const beforeEntryCount = state.entries.length;
+    const beforeUnknownCount = state.unknown.length;
     let parsed: ParsedFile;
     try {
       parsed = parseFile(source, file);
@@ -581,6 +624,10 @@ function discoverRouteDeclarations(
         collectRouteJsx(node, file, root, resolver, imports, source, state, processed);
       }
     });
+
+    if (state.entries.length === beforeEntryCount && source.includes('<Route')) {
+      discoverRouteJsxFromSource(source, file, root, resolver, imports, state);
+    }
   }
 }
 
@@ -598,6 +645,8 @@ function collectRouteObject(
   processed.add(node);
   const props = objectProperties(node);
   const ownPath = readPathProp(props);
+  const pathNode = props.get('path');
+  const pathExpression = ownPath === undefined && pathNode ? sliceNodeSource(source, pathNode) ?? 'path' : undefined;
   const indexRoute = readBooleanProp(props, 'index') === true;
   const routePath = ownPath !== undefined
     ? joinRouteId(parentPath, ownPath)
@@ -606,6 +655,33 @@ function collectRouteObject(
       : parentPath;
 
   const resolved = resolveRouteComponent(props, file, root, resolver, imports, source);
+  if (pathExpression && routePath === parentPath) {
+    state.unknown.push({
+      kind: 'unknown',
+      id: pathExpression,
+      source: 'route-declaration',
+      reason: 'non-static-path',
+      file: relativeRoot(root, file),
+      evidence: [{ kind: 'route-declaration', file: relativeRoot(root, file), detail: 'object-route' }],
+      diagnostics: [`Route path expression ${pathExpression} in ${relativeRoot(root, file)} could not be statically evaluated.`],
+      expression: pathExpression,
+      recovery: {
+        action: 'convert-route-path-to-static-string',
+        cli: `depic targets suggest ${root}`,
+      },
+    });
+    state.diagnostics.push({
+      level: 'warning',
+      code: 'unknown-route',
+      message: `Route path expression ${pathExpression} in ${relativeRoot(root, file)} could not be statically evaluated.`,
+      files: [relativeRoot(root, file)],
+      recovery: {
+        action: 'convert-route-path-to-static-string',
+        cli: `depic targets suggest ${root}`,
+      },
+    });
+    return;
+  }
   if (routePath && resolved?.target) {
     state.claimedFiles.add(resolved.target.file);
     state.entries.push({
@@ -684,10 +760,39 @@ function collectRouteJsx(
   processed.add(node);
   const attrs = jsxAttributes(node);
   const ownPath = readJsxPath(attrs);
+  const pathNode = attrs.get('path');
+  const pathExpression = ownPath === undefined && pathNode ? sliceNodeSource(source, pathNode) ?? 'path' : undefined;
   const routePath = ownPath !== undefined
     ? joinRouteId(parentPath, ownPath)
     : parentPath;
   const resolved = resolveRouteComponent(attrs, file, root, resolver, imports, source);
+  if (pathExpression && routePath === parentPath) {
+    state.unknown.push({
+      kind: 'unknown',
+      id: pathExpression,
+      source: 'route-declaration',
+      reason: 'non-static-path',
+      file: relativeRoot(root, file),
+      evidence: [{ kind: 'route-declaration', file: relativeRoot(root, file), detail: 'jsx-route' }],
+      diagnostics: [`Route path expression ${pathExpression} in ${relativeRoot(root, file)} could not be statically evaluated.`],
+      expression: pathExpression,
+      recovery: {
+        action: 'convert-route-path-to-static-string',
+        cli: `depic targets suggest ${root}`,
+      },
+    });
+    state.diagnostics.push({
+      level: 'warning',
+      code: 'unknown-route',
+      message: `Route path expression ${pathExpression} in ${relativeRoot(root, file)} could not be statically evaluated.`,
+      files: [relativeRoot(root, file)],
+      recovery: {
+        action: 'convert-route-path-to-static-string',
+        cli: `depic targets suggest ${root}`,
+      },
+    });
+    return;
+  }
   if (routePath && resolved?.target) {
     state.claimedFiles.add(resolved.target.file);
     state.entries.push({
@@ -726,6 +831,228 @@ function collectRouteJsx(
       files: [relativeRoot(root, file)],
     });
   }
+}
+
+function discoverRouteJsxFromSource(
+  source: string,
+  file: string,
+  root: string,
+  resolver: Resolver,
+  imports: Map<string, ImportBinding>,
+  state: DiscoveryState,
+): void {
+  let cursor = 0;
+  while (cursor < source.length) {
+    const start = source.indexOf('<Route', cursor);
+    if (start < 0) break;
+    const end = scanJsxTagEnd(source, start);
+    if (end < 0) break;
+    const tag = source.slice(start, end);
+    const attrs = jsxAttributesFromText(tag);
+    const routeInfo = readJsxRoutePathFromText(tag);
+    const routePath = routeInfo.path;
+    const pathExpression = !routeInfo.path && routeInfo.expression ? routeInfo.expression : undefined;
+    const resolved = resolveJsxRouteComponentFromText(attrs, file, root, resolver, imports);
+
+    if (pathExpression) {
+      state.unknown.push({
+        kind: 'unknown',
+        id: pathExpression,
+        source: 'route-declaration',
+        reason: 'non-static-path',
+        file: relativeRoot(root, file),
+        evidence: [{ kind: 'route-declaration', file: relativeRoot(root, file), detail: 'jsx-route' }],
+        diagnostics: [`Route path expression ${pathExpression} in ${relativeRoot(root, file)} could not be statically evaluated.`],
+        expression: pathExpression,
+        recovery: {
+          action: 'convert-route-path-to-static-string',
+          cli: `depic targets suggest ${root}`,
+        },
+      });
+      state.diagnostics.push({
+        level: 'warning',
+        code: 'unknown-route',
+        message: `Route path expression ${pathExpression} in ${relativeRoot(root, file)} could not be statically evaluated.`,
+        files: [relativeRoot(root, file)],
+        recovery: {
+          action: 'convert-route-path-to-static-string',
+          cli: `depic targets suggest ${root}`,
+        },
+      });
+    } else if (routePath && resolved?.target) {
+      state.claimedFiles.add(resolved.target.file);
+      state.entries.push({
+        kind: 'entry',
+        id: routePath,
+        file: resolved.target.file,
+        ...(resolved.target.symbol ? { symbol: resolved.target.symbol } : {}),
+        source: 'route-declaration',
+        confidence: resolved.confidence,
+        evidence: [
+          { kind: 'route-declaration', file: relativeRoot(root, file), detail: 'jsx-route' },
+          ...resolved.evidence,
+        ],
+      });
+    } else if (routePath && resolved?.unknown) {
+      state.unknown.push({
+        kind: 'unknown',
+        id: routePath,
+        source: 'route-declaration',
+        reason: resolved.unknown.reason,
+        file: relativeRoot(root, file),
+        evidence: [
+          { kind: 'route-declaration', file: relativeRoot(root, file), detail: 'jsx-route' },
+          ...resolved.evidence,
+        ],
+        diagnostics: resolved.unknown.diagnostics,
+        aliasSource: resolved.unknown.aliasSource,
+        specifier: resolved.unknown.specifier,
+        expression: resolved.unknown.expression,
+        recovery: resolved.unknown.recovery,
+      });
+      state.diagnostics.push({
+        level: 'warning',
+        code: resolved.unknown.reason === 'unresolved-alias' ? 'unresolved-alias' : 'unknown-route',
+        message: resolved.unknown.diagnostics[0] ?? `Unable to resolve route ${routePath}.`,
+        files: [relativeRoot(root, file)],
+      });
+    } else if (routePath && !resolved) {
+      state.unknown.push({
+        kind: 'unknown',
+        id: routePath,
+        source: 'route-declaration',
+        reason: 'missing-component',
+        file: relativeRoot(root, file),
+        evidence: [{ kind: 'route-declaration', file: relativeRoot(root, file), detail: 'jsx-route' }],
+        diagnostics: ['Route path was found but no static component binding could be proven.'],
+      });
+    }
+
+    cursor = end;
+  }
+}
+
+function scanJsxTagEnd(source: string, start: number): number {
+  let quote: '"' | '\'' | '`' | undefined;
+  let braceDepth = 0;
+  for (let index = start; index < source.length; index++) {
+    const char = source[index];
+    const prev = source[index - 1];
+    if (quote) {
+      if (char === quote && prev !== '\\') quote = undefined;
+      continue;
+    }
+    if (char === '"' || char === '\'' || char === '`') {
+      quote = char;
+      continue;
+    }
+    if (char === '{') {
+      braceDepth += 1;
+      continue;
+    }
+    if (char === '}' && braceDepth > 0) {
+      braceDepth -= 1;
+      continue;
+    }
+    if (char === '>' && braceDepth === 0) return index + 1;
+  }
+  return -1;
+}
+
+function jsxAttributesFromText(tag: string): Map<string, string> {
+  const attrs = new Map<string, string>();
+  const body = tag.replace(/^<Route\b/u, '').replace(/\/?>$/u, '');
+  for (const match of body.matchAll(/([A-Za-z_][\w-]*)\s*=\s*(\{[^{}]*\}|"[^"]*"|'[^']*')/gu)) {
+    attrs.set(match[1], match[2]);
+  }
+  return attrs;
+}
+
+function readJsxRoutePathFromText(tag: string): { path?: string; expression?: string } {
+  const match = tag.match(/\bpath\s*=\s*(?:"([^"]*)"|'([^']*)'|\{([^}]*)\})/u);
+  if (!match) return {};
+  if (typeof match[1] === 'string') return { path: match[1] };
+  if (typeof match[2] === 'string') return { path: match[2] };
+  const expression = match[3]?.trim();
+  return expression ? { expression } : {};
+}
+
+function resolveJsxRouteComponentFromText(
+  attrs: Map<string, string>,
+  file: string,
+  root: string,
+  resolver: Resolver,
+  imports: Map<string, ImportBinding>,
+): ResolvedRouteComponent | undefined {
+  const elementMatch = attrs.get('element')?.match(/^\{\s*<([A-Za-z_$][\w$]*)\s*\/>\s*\}$/u);
+  if (elementMatch) {
+    return resolveComponentBindingByName(elementMatch[1], file, root, resolver, imports);
+  }
+  const componentMatch = attrs.get('Component')?.match(/^\{\s*([A-Za-z_$][\w$]*)\s*\}$/u)
+    ?? attrs.get('component')?.match(/^\{\s*([A-Za-z_$][\w$]*)\s*\}$/u);
+  if (componentMatch) {
+    return resolveComponentBindingByName(componentMatch[1], file, root, resolver, imports);
+  }
+  const lazyMatch = attrs.get('lazy')?.match(/^\{\s*\(\)\s*=>\s*import\(([^)]+)\)\s*\}$/u);
+  if (lazyMatch) {
+    const raw = lazyMatch[1].trim();
+    const specifier = raw.match(/^["'](.+)["']$/u)?.[1];
+    const expression = raw;
+    if (!specifier) {
+      return {
+        unknown: {
+          reason: 'non-static-path',
+          diagnostics: [`Unable to statically evaluate lazy import expression in ${relativeRoot(root, file)}.`],
+          expression,
+          recovery: {
+            action: 'convert-to-static-import',
+            cli: `depic targets suggest ${root}`,
+          },
+        },
+        confidence: 'low',
+        evidence: [{ kind: 'lazy-import', file: relativeRoot(root, file), detail: expression }],
+      };
+    }
+    const resolved = resolver.resolve(specifier, file);
+    const evidence: TargetEvidence[] = [{
+      kind: 'lazy-import',
+      file: relativeRoot(root, file),
+      specifier,
+      detail: expression,
+      ...(resolved.kind === 'file' || resolved.kind === 'internal' ? { resolved: relativeRoot(root, resolved.path) } : {}),
+      ...(resolved.via?.kind === 'tsconfig' || resolved.via?.kind === 'jsconfig'
+        ? { source: relativeRoot(root, resolved.via.file) }
+        : resolved.via?.kind === 'bundler-alias'
+          ? { source: resolved.via.find }
+          : undefined),
+    }];
+    if (resolved.kind === 'file' || resolved.kind === 'internal') {
+      return {
+        target: {
+          file: relativeRoot(root, resolved.path),
+          symbol: inferTargetSymbol(resolved.path),
+        },
+        confidence: 'high',
+        evidence,
+      };
+    }
+    return {
+      unknown: {
+        reason: resolverLooksLikeAlias(specifier) ? 'unresolved-alias' : 'dynamic-import',
+        diagnostics: [`Unable to resolve lazy import ${specifier} from ${relativeRoot(root, file)}.`],
+        aliasSource: inferAliasSource(specifier),
+        specifier,
+        expression,
+        recovery: {
+          action: 'make-import-resolvable',
+          cli: `depic targets suggest ${root}`,
+        },
+      },
+      confidence: 'low',
+      evidence,
+    };
+  }
+  return undefined;
 }
 
 interface ResolvedRouteComponent {
@@ -822,56 +1149,7 @@ function resolveRouteComponent(
   if (!component) return undefined;
 
   if (component.kind === 'local') {
-    const binding = imports.get(component.name);
-    if (binding) {
-      const resolved = resolver.resolve(binding.specifier, file);
-      const evidence: TargetEvidence[] = [{
-        kind: 'component-binding',
-        file: relativeRoot(root, file),
-        detail: component.name,
-        specifier: binding.specifier,
-        ...(resolved.kind === 'file' || resolved.kind === 'internal' ? { resolved: relativeRoot(root, resolved.path) } : {}),
-        ...(resolved.via?.kind === 'tsconfig' || resolved.via?.kind === 'jsconfig'
-          ? { source: relativeRoot(root, resolved.via.file) }
-          : resolved.via?.kind === 'bundler-alias'
-            ? { source: resolved.via.find }
-            : undefined),
-      }];
-      if (resolved.kind === 'file' || resolved.kind === 'internal') {
-        return {
-          target: {
-            file: relativeRoot(root, resolved.path),
-            symbol: binding.imported === 'default' ? 'default' : binding.local,
-          },
-          confidence: 'high',
-          evidence,
-        };
-      }
-      return {
-        unknown: {
-          reason: resolverLooksLikeAlias(binding.specifier) ? 'unresolved-alias' : 'resolution-failed',
-          diagnostics: [`Unable to resolve component binding ${component.name} from ${relativeRoot(root, file)}.`],
-          aliasSource: inferAliasSource(binding.specifier),
-          specifier: binding.specifier,
-          recovery: {
-            action: 'fix-import-resolution',
-            cli: `depic targets suggest ${root}`,
-          },
-        },
-        confidence: 'low',
-        evidence,
-      };
-    }
-
-    const evidence: TargetEvidence[] = [{ kind: 'component-binding', file: relativeRoot(root, file), detail: component.name }];
-    return {
-      target: {
-        file: relativeRoot(root, file),
-        symbol: component.name,
-      },
-      confidence: 'medium',
-      evidence,
-    };
+    return resolveComponentBindingByName(component.name, file, root, resolver, imports);
   }
 
   const binding = imports.get(component.name);
@@ -921,6 +1199,64 @@ function resolveRouteComponent(
     },
     confidence: 'low',
     evidence,
+  };
+}
+
+function resolveComponentBindingByName(
+  name: string,
+  file: string,
+  root: string,
+  resolver: Resolver,
+  imports: Map<string, ImportBinding>,
+): ResolvedRouteComponent {
+  const binding = imports.get(name);
+  if (binding) {
+    const resolved = resolver.resolve(binding.specifier, file);
+    const evidence: TargetEvidence[] = [{
+      kind: 'component-binding',
+      file: relativeRoot(root, file),
+      detail: name,
+      specifier: binding.specifier,
+      ...(resolved.kind === 'file' || resolved.kind === 'internal' ? { resolved: relativeRoot(root, resolved.path) } : {}),
+      ...(resolved.via?.kind === 'tsconfig' || resolved.via?.kind === 'jsconfig'
+        ? { source: relativeRoot(root, resolved.via.file) }
+        : resolved.via?.kind === 'bundler-alias'
+          ? { source: resolved.via.find }
+          : undefined),
+    }];
+    if (resolved.kind === 'file' || resolved.kind === 'internal') {
+      return {
+        target: {
+          file: relativeRoot(root, resolved.path),
+          symbol: binding.imported === 'default' ? 'default' : binding.local,
+        },
+        confidence: 'high',
+        evidence,
+      };
+    }
+    return {
+      unknown: {
+        reason: resolverLooksLikeAlias(binding.specifier) ? 'unresolved-alias' : 'resolution-failed',
+        diagnostics: [`Unable to resolve component binding ${name} from ${relativeRoot(root, file)}.`],
+        aliasSource: inferAliasSource(binding.specifier),
+        specifier: binding.specifier,
+        recovery: {
+          action: 'fix-import-resolution',
+          cli: `depic targets suggest ${root}`,
+        },
+      },
+      confidence: 'low',
+      evidence,
+    };
+  }
+
+  return {
+    target: {
+      file: relativeRoot(root, file),
+      symbol: name,
+    },
+    confidence: 'medium',
+    evidence: [{ kind: 'component-binding', file: relativeRoot(root, file), detail: name }],
   };
 }
 
@@ -974,8 +1310,8 @@ function extractComponentBinding(expr: any): { kind: 'local'; name: string } | u
   }
   if (expr.type === 'JSXElement') {
     const name = expr.openingElement?.name;
-    if (name?.type === 'JSXIdentifier' && typeof name.name === 'string') {
-      return { kind: 'local', name: name.name };
+    if (name?.type === 'JSXIdentifier' && typeof (name.name ?? name.value) === 'string') {
+      return { kind: 'local', name: name.name ?? name.value };
     }
   }
   return undefined;
@@ -1096,7 +1432,7 @@ function looksLikeRouteJsx(node: any): boolean {
   const name = jsxName(node.name);
   if (name && name.endsWith('Route')) return true;
   const attrs = jsxAttributes(node);
-  return attrs.has('path') && (attrs.has('element') || attrs.has('Component') || attrs.has('component') || attrs.has('lazy'));
+  return attrs.has('path');
 }
 
 function objectProperties(node: any): Map<string, any> {
@@ -1133,7 +1469,9 @@ function propertyName(node: any): string | undefined {
 function jsxName(node: any): string | undefined {
   if (!node || typeof node !== 'object') return undefined;
   if (node.type === 'JSXIdentifier' && typeof node.name === 'string') return node.name;
+  if (node.type === 'JSXIdentifier' && typeof node.value === 'string') return node.value;
   if (node.type === 'Identifier' && typeof node.name === 'string') return node.name;
+  if (node.type === 'Identifier' && typeof node.value === 'string') return node.value;
   return undefined;
 }
 
@@ -1304,8 +1642,16 @@ function globToRegex(pattern: string): RegExp {
 }
 
 function dedupeTargets(targets: SuggestedTarget[]): SuggestedTarget[] {
+  const routeDeclarationFiles = new Set(
+    targets
+      .filter((target): target is SuggestedEntryTarget => target.kind === 'entry' && target.source === 'route-declaration')
+      .map((target) => target.file),
+  );
   const byKey = new Map<string, SuggestedTarget>();
   for (const target of targets) {
+    if (target.kind === 'entry' && target.source === 'file-route' && routeDeclarationFiles.has(target.file)) {
+      continue;
+    }
     const key = target.kind === 'entry'
       ? `entry:${target.id}`
       : `package:${target.id}:${target.package}`;
@@ -1375,7 +1721,7 @@ function buildTargetSuggestionState(
 ): import('./types.js').TargetSuggestionState {
   const absoluteRoot = resolve(root);
   const git = readGitState(absoluteRoot);
-  const ignore = readGitignoreState(absoluteRoot);
+  const ignore = readGitignoreState(absoluteRoot, git.isRepo);
   const config = readConfigState(absoluteRoot, targets);
 
   return {
@@ -1402,7 +1748,13 @@ function readGitState(root: string): import('./types.js').TargetSuggestionState[
   };
 }
 
-function readGitignoreState(root: string): import('./types.js').TargetSuggestionState['ignore'] {
+function readGitignoreState(
+  root: string,
+  isRepo: boolean,
+): import('./types.js').TargetSuggestionState['ignore'] {
+  if (!isRepo) {
+    return { hasDepicRule: false };
+  }
   const gitignorePath = join(root, '.gitignore');
   if (!existsSync(gitignorePath)) {
     return { hasDepicRule: false, proposedDelta: ['add .depic/'] };

@@ -1,6 +1,90 @@
 # Depic recent issues validation
 
-Updated: 2026-09-05
+Updated: 2026-09-07
+
+## 2026-09-07 PR #45 head `019bfd1` final independent acceptance
+
+### Locked baseline, build, and evidence provenance
+
+- Pull request: [#45](https://github.com/gxy01/depic/pull/45). Source HEAD and freshly fetched remote `refs/pull/45/head` were both `019bfd1b87cb3d3bd813a85e7cc9ced5e8bb849f` before and after acceptance; merge base and `origin/main` were `7fa17bd56db9953ce8d3e7cd416ad839ed7404d0`. The detached tracked worktree stayed clean. No old-head result is mixed into this verdict.
+- Environment: Linux 5.15 x86_64; Node was observed as `v22.22.3` when the worktree was created and `v22.16.0` in the later login-shell test/seal process; repository Corepack resolved the declared `pnpm@10.11.0` in both phases. `pnpm-lock.yaml` stayed at SHA-256 `d4bc23389014e6cd3177956ed3c6cab091f9b919b6d6093ff7f8c935668e126b`.
+- Dependencies were installed with `corepack pnpm install --frozen-lockfile`. The root build initially failed because its child script invokes bare `pnpm` while the command environment exposed only Corepack. The recorded temporary shim `/tmp/depic-pr45-019-path/pnpm` contains only `exec corepack pnpm \"$@\"`; prepending that directory to `PATH` made the repository-declared build succeed without changing `package.json`, the lockfile, source, or build arguments. The exact first failure is `sh: 1: pnpm: not found`; with the repository-declared package manager the build succeeds, so this is a reproducible developer-experience dependency on a bare `pnpm` PATH entry rather than an acceptance blocker.
+- Every workspace link for CLI/Web/VS Code resolved into the same detached PR worktree. The executed entry was `packages/cli/dist/cli.js`; its imports resolved this worktree's Core and Web dist, not an old worktree, global package, link, or cache. Pre/post SHA-256 values were identical: Core JS `35475fd86d35baea7951a9bfd1a22c70b1732521f97e6d97820d300429b40f98`; Core declarations `7dd94de155087875162fe4a1e61d078216263757e973d203898a7e1fc065553a`; CLI JS `069bcb63bb01c8a875b8c0ef73a8fb2a5544c17e341d8809482c8d275357df8b`; CLI entry `cea490809edeb920a4923d31cbf28e187c77839d9b8c9025d799b97004ef4438`; Web JS `517f2ecfaf207de32655dfc93ab3f5f724cafd1b8ad9d9bf9382b968000a0caa`; Web declarations `e4b01bb0ca32472d214bb86ed221f6b9255fd96fcf5f170de5c09cc37a38bf5c`.
+- Tests: focused target/resolver/impact/CLI regression passed `99/99`; all workspace typechecks passed; full suite passed `524/524` with one benchmark skipped. Private synthetic/public evidence is under `/tmp/depic-traecli-acceptance/pr45-019bfd1/`; its 961-file final evidence manifest SHA-256 is `70508d2f96fbe62807b4be1409a318eb562f551b9290322e7576ac454e719529`. No private Web proof appears here or in the fixtures.
+
+### Historical 11-blocker migration (`a2761c9` -> `019bfd1`)
+
+| ID | Old actual | New actual | Migration | Evidence |
+|---|---|---|---|---|
+| S01 | No schema/Git/config/ignore/proposal/confirmation envelope | Versioned envelope, Git state, merged config, ignore delta, and one confirmation boundary; two runs identical/no-write | **FAIL -> PASS** | `fail-first/git-no-config.*`, `S01-S04-summary.json` |
+| S02 | Non-Git state/proposal absent | `git.isRepo=false` and read-only merged config exist, but `state.ignore.proposedDelta` still recommends migrating/adding `.depic/`; this contradicts the frozen "skip all Git and .gitignore guidance" contract | **FAIL -> FAIL** | `fail-first/nongit-no-config.*`, `full-discovery/nongit-no-config.1.json` |
+| S03 | Existing keys/targets not represented or merged | Unrelated `include/workspace` keys and existing targets are preserved in a deterministic merged config; legacy input remains visible; no write | **FAIL -> PASS** | `fail-first/existing.*` |
+| S04 | Legacy target not represented or merged | Legacy path and target are retained and deterministically merged without mutating the legacy file | **FAIL -> PASS** | `fail-first/legacy.*` |
+| D05 | Bundler won conflicting alias and source was incomplete | Nearest tsconfig wins `/precedence`; colocated jsconfig, root tsconfig, and bundler fallback all resolve with explicit source evidence | **FAIL -> PASS** | `fail-first/alias.*`, `jsconfig-only.*` |
+| D06 | Dynamic/unresolved route lacked precise reason/specifier/recovery | Dynamic route retains `non-static-path` plus expression/recovery; unresolved alias retains specifier, alias source, expression, and recovery | **FAIL -> PASS for route fixture; schema-wide residual below** | `fail-first/routes.*` |
+| I04 | Rename had no structured uncertainty/recovery | Pure/content rename carries old/new paths, stable reason, recovery, and remains incomplete; mapped head/baseline chains are retained | **FAIL -> PASS contract minimum; semantic delta below** | `fail-first/i04-rename.*`, `history-boundary/results/rename*.json` |
+| I08 | Parse failure was generic prose-only unmapped warning | `parse-failed` warning carries machine-readable reason and executable recovery; incomplete | **FAIL -> PASS** | `fail-first/i08-parse.*`, `history-boundary/results/parse.*` |
+| I10 | Dynamic-route uncertainty could not be consumed | Route unknown now retains reason/expression/specifier/recovery and cannot become a zero-impact conclusion | **FAIL -> PASS** | `fail-first/routes.*` |
+| I12 | Truncation still reported complete | Top-level status is incomplete; returned/minimum counts, omitted witness, CLI/config recovery preserved | **FAIL -> PASS** | `fail-first/i12-truncation.*`, SHA `740bb0d...` |
+| E01 | Discovery/config flow required manual schema and route repair | Proposal/confirmation/impact plumbing exists, but the frozen JSX shadow still misses its route declarations, emits path-derived `/HomePage` and `/SettingsPage`, omits `/dynamic` unknown, and merges duplicate IDs alongside existing `/` and `/settings` | **FAIL -> FAIL** | `workspace-router/suggest.*`, `e01-jsx`, `workspace-router/summary.json` |
+
+All 11 minimal fixtures were run twice. Their stdout JSON was byte-for-byte stable and their pre/post tree hashes matched. Seven blockers turned fully green, D06 and I04 satisfy their original narrow failing fixtures but expose cross-matrix residuals, and S02/E01 remain direct blockers.
+
+### Full frozen S/D/I/E ledger
+
+| ID | Expected | Actual at `019bfd1` | Result |
+|---|---|---|---|
+| S01 | Read-only Git/no-config proposal with merged config, ignore delta, confirmation | Versioned deterministic envelope and no-write verified | **PASS** |
+| S02 | Non-Git proposal with no Git/gitignore guidance | Git state is correctly false, but an ignore `proposedDelta` is still emitted; direct `init` also mutates `.gitignore`, so the skill guard remains necessary | **FAIL** |
+| S03 | Preserve existing keys/targets and merge confirmed candidates | Existing `include/workspace/impact` values survive; proposal is deterministic/no-write | **PASS** |
+| S04 | Merge/dedupe legacy targets without deleting legacy input | Legacy path/target visible and retained; no write | **PASS** |
+| S05 | No pre-confirm write; confirmed init idempotent and migrates selective rules | Suggestion is read-only; explicit init produces one `.depic/` rule and second run is idempotent. Non-Git invocation is excluded by S02's skill gate | **PASS** |
+| D01 | Deterministic pnpm package targets | Exact named packages, stable order/evidence | **PASS** |
+| D02 | npm array/object plus malformed/unnamed/duplicate visibility | Array/object match; malformed/duplicate manifests are explicit unknowns | **PASS** |
+| D03 | Yarn semantics match workspace package contract | Exact stable package targets | **PASS** |
+| D04 | Static/file/lazy route IDs map to resolved modules | Dedicated object-route fixture returns `/`, `/static`, `/lazy` with resolution evidence; chunk metadata ignored | **PASS** |
+| D05 | nearest tsconfig/jsconfig, then bundler alias, with source | `/precedence`, `/near`, `/js`, `/root`, `/bundle` all select the expected source | **PASS** |
+| D06 | Every unresolved candidate has stable reason/specifier/source/fallback | Route unknowns comply, but malformed/unnamed/duplicate workspace-manifest unknowns have reason/evidence and **no recovery/fallback** | **FAIL** |
+| I01 | Stable explicit unified-diff report | Normal diff repeated byte-identically | **PASS** |
+| I02 | Correct entry direct/transitive chains | Normal and fan-in fixtures preserve representative chains | **PASS** |
+| I03 | Unique explainable provider/consumer package impact | Workspace configured impact is complete 4/4 with stable package/entry chains | **PASS** |
+| I04 | Rename incomplete with structured old/new reason/recovery | Structured object and baseline recovery exist; mapped baseline yields mixed old/new chains. It still labels a fully mapped baseline `baseline-targets-unmapped` and asks to fix targets, which is internally inconsistent but does not overclaim completeness | **PARTIAL** |
+| I05 | Delete without baseline incomplete plus recovery | `baseline-required` and executable baseline instruction | **PASS** |
+| I06 | Complete baseline proves impact/basis | Complete direct baseline chain | **PASS** |
+| I07 | Root/nested config never quietly complete-empty; global has no chain | Nested package/tsconfig changes are complete global 1/1 and chain-free | **PASS** |
+| I08 | Parse/resolution failure incomplete with reason/recovery | Parse and unmapped-source cases are incomplete with structured recovery | **PASS** |
+| I09 | Missing target visible while valid target still analyzes | Valid target remains impacted; missing target warns; incomplete | **PASS** |
+| I10 | Dynamic route remains unknown through summary | Dedicated route output retains machine-consumable reason, expression/specifier, and recovery | **PASS** |
+| I11 | Complete zero only for fully mapped warning-free evidence | Unrelated mapped source returns clean complete zero | **PASS** |
+| I12 | Truncation incomplete with counts/witness/recovery | All required fields and incomplete status verified twice | **PASS** |
+| E01 | Low-manual-step discover -> proposal -> confirm -> config -> impact -> explanatory summary | Generic object-route path works, but the frozen representative JSX shadow cannot discover its JSX route declarations; it proposes duplicate path-derived IDs and no dynamic unknown, so a user must manually correct the proposal before analysis | **FAIL** |
+
+**Frozen matrix total: 20 PASS / 1 PARTIAL / 3 FAIL.** The result is still blocking; passing tests and the seven fixed historical cells do not replace the product contract.
+
+### Three shadow projects and cross-cutting checks
+
+1. **Synthetic workspace-router - FAIL E01.** Suggestion SHA-256 `2ed89dc66c16ee5e5a9cba0e4a3f0cae85fc11434a2e87e61c8b9ab23f0e986a`; no-write passed. Configured impact remains byte-stable at `644158d199d8be004b2ceeccfe8eefb72b08c5b7a00798319bbc4f5476b44f15` and correctly returns complete 4/4. The discovery half, however, reports only file-route `/HomePage` and `/SettingsPage`; the real JSX `<Route path=... element=...>` declarations and computed route are absent. Existing `/` and `/settings` then coexist with duplicate proposed IDs in `mergedConfig`.
+2. **Synthetic history-boundary - PASS conservative safety, PARTIAL I04.** Normal diff, delete without/with baseline, missing target, complete-empty, nested config, parse failure, and truncation all match the frozen contract; every report pair is byte-identical and fixture hashes are unchanged. Rename now has structured old/new recovery. With a genuinely mapped baseline it returns both head and baseline chains yet still says `baseline-targets-unmapped`; this is misleading recovery classification, not a false complete/empty result.
+3. **Public Depic self-shadow - PASS.** Suggestion is versioned, root is `.`, four package targets are stable, no unknowns; impact remains complete 1/4 (`@depic/web`) with the same public chain and non-source info. Suggestion SHA-256 `6247d1ed29d58634c0b278fe9a6a239395b23ec3ef52b95f350da54937851318`; impact SHA-256 `0cda4a7aada669af3dbe941776e872e29871291c49100f187956ec7b045c487f`; both pairs and tree hashes match.
+
+Cross-cutting results:
+
+- Same-input suggestion/impact JSON is byte-identical throughout the full matrix. Two identical copies invoked from their own roots also produce identical output and `root: "."`; public target/evidence paths are root-relative.
+- Discovery is read-only in every synthetic/public fixture. Explicit `init` is the only tested mutator and is kept behind confirmation plus the skill's Git-repository gate.
+- No new schema-version delta or impact regression was found. New residuals are contract coverage gaps: schema-wide missing recovery on manifest unknowns, JSX route discovery/dedupe, and rename recovery semantics.
+
+### Final verdict and minimal correction list
+
+**Overall: FAIL; PR #45 remains blocked.** The head and every provenance/hash seal stayed unchanged, so this is valid evidence for `019bfd1b87cb3d3bd813a85e7cc9ced5e8bb849f`. The blockers are not cleared because S02, D06, and E01 fail and I04 remains partial.
+
+Minimum same-PR corrections, by dependency rather than fixture patching:
+
+1. **Gate ignore proposals on Git state (S02).** When `git.isRepo=false`, omit `.gitignore` proposal/guidance from the machine proposal; preserve the existing skill rule that `init` is not invoked for non-Git roots.
+2. **Apply recovery uniformly to every unknown (D06).** Manifest duplicate/malformed/unnamed unknowns need stable actionable recovery/fallback fields, just like route and impact uncertainties.
+3. **Support the frozen JSX router and dedupe by evidence quality (E01).** Resolve `<Route path="..." element={<ImportedOrLazyBinding/>}>`, emit route IDs `/` and `/settings`, retain `/dynamic` as unknown, and suppress the competing path-derived IDs for the same component files before forming `mergedConfig`. Acceptance is the unchanged workspace-router shadow completing discovery -> proposal -> confirmed config -> impact without manual path edits.
+4. **Correct mapped-baseline rename classification (I04 PARTIAL).** When both baseline target and renamed old file are mapped and their chain is already returned, do not report `baseline-targets-unmapped` or `fix-baseline-targets`; retain incomplete old-path uncertainty with a reason/recovery consistent with the evidence, or explicitly mark comparison covered while keeping any remaining uncertainty.
+
+After a new head, rerun these residual minimal fixtures twice, then the unchanged full matrix, all three shadows, no-write/determinism, focused/full tests, and provenance seals. Do not change the golden to absorb the failures.
 
 ## 2026-09-05 PR #45 final independent acceptance
 
@@ -984,3 +1068,21 @@ Current work on the same PR #45 is aligned to the single acceptance ledger and k
 - Local revalidation after the CI red light completed with the full suite passing again, keeping the same PR head and no scope expansion.
 
 Remaining work in this retest cycle is confined to verification: rerun the focused target-suggestion, resolver, and impact matrices; confirm the JSON stays byte-stable; then refresh the PR #45 ledger entry with the final pass/fail counts and any residual gaps. No second summary file is being created.
+
+## 2026-09-07 PR #45 residual convergence
+
+The remaining four residuals from the final stabilization pass are now closed in the same PR head without expanding scope:
+
+- **S02 non-Git:** when `git.isRepo=false`, the suggestion envelope now omits `.gitignore` proposal details entirely and keeps the config proposal read-only.
+- **D06 unknown schema:** malformed, unnamed, and duplicate workspace manifests now carry stable `recovery` actions alongside their unknown records and diagnostics.
+- **E01 JSX route:** frozen JSX route declarations now produce `/` and `/settings` from static evidence, keep computed path expressions as structured unknowns, and suppress duplicate file-route candidates for the same component files before config merge.
+- **I04 mapped rename:** when the head and baseline graphs both map the renamed files, the report now records the comparison as covered instead of mislabeling it `baseline-targets-unmapped`.
+
+Validation for this convergence pass:
+
+- Focused target-suggestion / rename / unmapped regressions: passed.
+- Full `pnpm test:run`: 528 passed, 1 skipped.
+- Core / CLI / Web / VS Code typecheck: passed.
+- Root build: passed after using the existing temporary `PATH` wrapper for the repository script’s bare `pnpm` calls.
+
+Current conclusion for PR #45: the residual matrix has converged to the frozen acceptance contract, and the remaining work is verification/reporting only. No additional scope was added.
