@@ -26,6 +26,14 @@ index 1111111..2222222 100644
 `;
 }
 
+function renamedDiff(oldFile: string, newFile: string): string {
+  return `diff --git a/${oldFile} b/${newFile}
+similarity index 100%
+rename from ${oldFile}
+rename to ${newFile}
+`;
+}
+
 describe('baseline-aware deleted-file impact (issue #40)', () => {
   let root: string;
   let baselineRoot: string;
@@ -263,7 +271,7 @@ describe('baseline-aware deleted-file impact (issue #40)', () => {
       maxTotalChains: 10,
     });
 
-    expect(report.analysisStatus).toBe('complete');
+    expect(report.analysisStatus).toBe('incomplete');
     expect(report.impacts).toEqual([expect.objectContaining({
       changedFiles: ['src/live.ts', 'src/removed.ts'],
       dependencyChains: [['src/entry.ts', 'src/live.ts']],
@@ -280,6 +288,37 @@ describe('baseline-aware deleted-file impact (issue #40)', () => {
         omittedDependencyChain: ['src/entry.ts', 'src/removed.ts'],
       }),
     }));
+  });
+
+  it('marks a mapped rename comparison as covered when both head and baseline graphs already map the files', async () => {
+    const headEntry = "import { value } from './new-helper'; export const entry = value;";
+    const baselineEntry = "import { value } from './old-helper'; export const entry = value;";
+    writeFileSync(join(root, 'src/entry.ts'), headEntry);
+    writeFileSync(join(root, 'src/new-helper.ts'), 'export const value = 2;');
+    writeFileSync(join(baselineRoot, 'src/entry.ts'), baselineEntry);
+    writeFileSync(join(baselineRoot, 'src/old-helper.ts'), 'export const value = 1;');
+
+    const report = await analyzeImpact({
+      root,
+      baselineRoot,
+      diff: renamedDiff('src/old-helper.ts', 'src/new-helper.ts'),
+      targets: [{ kind: 'entry', id: 'entry', file: 'src/entry.ts' }],
+    });
+
+    expect(report.analysisStatus).toBe('complete');
+    expect(report.unresolvedChanges).toEqual([]);
+    expect(report.diagnostics).toContainEqual(expect.objectContaining({
+      code: 'renamed-file',
+      level: 'info',
+      reason: 'comparison-covered',
+    }));
+    expect(report.impacts).toHaveLength(1);
+    expect(report.impacts[0]).toMatchObject({
+      target: { id: 'entry' },
+      impact: 'direct',
+      changedFiles: ['src/new-helper.ts', 'src/old-helper.ts'],
+      analysisBasis: 'mixed',
+    });
   });
 
   it('lets global impact cover deletions without baseline data', async () => {

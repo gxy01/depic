@@ -1,4 +1,4 @@
-import { analyze, analyzeImpact, type ImpactOptions, type ImpactTarget } from '@depic/core';
+import { analyze, analyzeImpact, suggestTargets, type ImpactOptions, type ImpactTarget } from '@depic/core';
 import { generateHtml, startServer } from '@depic/web';
 import { relative, join } from 'node:path';
 import { writeFileSync, existsSync, readFileSync, appendFileSync } from 'node:fs';
@@ -88,6 +88,15 @@ export async function runImpact(
     if (diagnostic.code === 'unmapped-file') {
       lines.push(`Unmapped source/analysis files (warning): ${diagnostic.files?.join(', ')}`);
     }
+    if (diagnostic.code === 'parse-failed') {
+      lines.push(`Parse-failed source files (warning): ${diagnostic.files?.join(', ')}`);
+      if (diagnostic.reason) {
+        lines.push(`Parse reason: ${diagnostic.reason}`);
+      }
+    }
+    if (diagnostic.code === 'resolution-failed') {
+      lines.push(`Resolution-failed source files (warning): ${diagnostic.files?.join(', ')}`);
+    }
     if (diagnostic.code === 'chain-limit-reached' && diagnostic.chainLimit) {
       const detail = diagnostic.chainLimit;
       lines.push(`Truncated target ${detail.targetId}: returned ${detail.returnedChainCount} / at least ${detail.knownMinimumChainCount} chains (limits: per-target=${detail.maxChainsPerTarget}, total=${detail.maxTotalChains}).`);
@@ -110,6 +119,11 @@ export async function runImpact(
   }
   lines.push(`Report written to ${reportPath}`);
   return lines.join('\n');
+}
+
+export async function runTargetsSuggest(rootDir: string): Promise<string> {
+  const report = await suggestTargets(rootDir);
+  return JSON.stringify(report, null, 2);
 }
 
 export async function runWeb(rootDir: string, output?: string): Promise<string> {
