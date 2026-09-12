@@ -1,6 +1,85 @@
 # Depic recent issues validation
 
-Updated: 2026-09-07
+Updated: 2026-09-12
+
+## 2026-09-12 E01 local stabilization candidate (pre-independent acceptance)
+
+- Scope remains PR #45 only. The implementation replaces the broad textual JSX fallback with SWC AST route boundaries, resolves `lazy(() => import(...))` component bindings, preserves non-static lazy imports as structured `dynamic-import` unknowns, suppresses component file-routes once a declaration claims the module, and merges entry proposals by semantic route ID.
+- Frozen `workspace-router` was run twice from the unchanged synthetic fixture. Both reports are byte-identical (SHA-256 `57eb93136248e0f645a9bbc9fd65dd719592a2d69f50de97b3b875a5423a9d5b`) and the fixture tree stayed unchanged (`cde2fe9fdca055fdb38a37a93aff0d7f188063493a305745b273dd074d16367a`). Entries are exactly `/ -> HomePage.tsx` and `/settings -> SettingsPage.tsx`; `/dynamic` is a `dynamic-import` unknown with recovery; merged entry IDs are `/`, `/settings`, and retained `legacy:router`, with no `/HomePage` or `/SettingsPage`.
+- Public Depic self-shadow suggestion was run twice and is byte-identical (SHA-256 `0e15393c2dd13ff5da027ee214c0cdc592aed3a01c5431d08435585a3c76681f`). It emits no route entries and no route-declaration unknowns, closing the ordinary test/object-text overmatching counterexample.
+- Focused target tests passed `9/9`; workspace typechecks passed; full suite passed `530/530` with one benchmark skipped; lint has zero errors and only repository-existing warnings. Root build passed using a temporary Corepack pnpm shim because the root script invokes bare `pnpm`; no manifest, lockfile, or build argument changed.
+- This is local candidate evidence, not the final verdict. After push and green CI, TraeCLI must rerun the unchanged 24-cell matrix and all three shadows before merge or release.
+
+## 2026-09-08 PR #45 head `5130d97` final independent acceptance
+
+### Locked baseline, build, and evidence provenance
+
+- Pull request: [#45](https://github.com/gxy01/depic/pull/45). Source HEAD and freshly fetched remote `refs/pull/45/head` were both `5130d9768da809b8010516fbb36cd8f75095fae2` before and after acceptance; `origin/main` and merge base were `7fa17bd56db9953ce8d3e7cd416ad839ed7404d0`. The detached tracked worktree remained clean. Results from earlier heads are retained below as historical ledgers and are not mixed into this verdict.
+- Environment: Linux x86_64, Node `v22.16.0`, Corepack `0.32.0`, repository-declared pnpm `10.11.0`. Install used `corepack pnpm install --frozen-lockfile`. The temporary `/tmp/depic-pr45-513-path/pnpm` shim only executes `corepack pnpm "$@"` so the repository root build's bare `pnpm` child commands use the declared version; no source, package manifest, lockfile, or build argument was changed.
+- `pnpm-lock.yaml` remained SHA-256 `d4bc23389014e6cd3177956ed3c6cab091f9b919b6d6093ff7f8c935668e126b`; root `package.json` remained `09a3761000115104f1d0965efeeb514fd184c75f031ea4cc1f52c2beda34b057`. CLI/Core/Web and VS Code workspace links all resolve to this exact detached worktree. The executed CLI entry is `packages/cli/dist/cli.js`.
+- Pre/post dist SHA-256 values were identical: Core JS `c149ee89d4c2d74e4f7eb1d8bb63061db585ea98bcc2640502e88446a034d838`; Core declarations `7dd94de155087875162fe4a1e61d078216263757e973d203898a7e1fc065553a`; CLI JS `069bcb63bb01c8a875b8c0ef73a8fb2a5544c17e341d8809482c8d275357df8b`; CLI entry `cea490809edeb920a4923d31cbf28e187c77839d9b8c9025d799b97004ef4438`; Web JS `517f2ecfaf207de32655dfc93ab3f5f724cafd1b8ad9d9bf9382b968000a0caa`; Web declarations `e4b01bb0ca32472d214bb86ed221f6b9255fd96fcf5f170de5c09cc37a38bf5c`.
+- Focused target/resolver/impact/CLI regression passed `119/119`; all workspace typechecks passed; the full suite passed `528/528` with one benchmark skipped. Synthetic/public evidence is under `/tmp/depic-traecli-acceptance/pr45-5130d97/`; its 748-file evidence manifest SHA-256 is `e9817745d515d8265bb9f3d236d8f5a910ae6551ca052a3628778b4dd7219a5c`. No private Web proof is included.
+
+### Residual migration (`019bfd1` -> `5130d97`)
+
+| ID | Old actual | New actual at `5130d97` | Result | Byte/no-write evidence |
+|---|---|---|---|---|
+| S02 | Non-Git proposal still emitted `.gitignore` guidance | `git.isRepo=false`; `state.ignore` has only `hasDepicRule=false` and no `proposedDelta`; both existing-ignore and absent-ignore adjacent fixtures stay read-only | **FAIL -> PASS** | `residual/s02-nongit.{1,2}.json`, SHA `1e687608...`; adjacent `s02-no-ignore.*`; byte-identical and tree hashes match |
+| D06 | Manifest unknowns had reason but no recovery/fallback | Duplicate, unnamed, and malformed manifests each have stable reason plus actionable `recovery.action` and CLI fallback; the route unknown adjacent fixture remains structured | **FAIL -> PASS** | `residual/d06-manifest.{1,2}.json`, SHA `41366770...`; byte-identical and tree hashes match |
+| E01 | JSX route declarations were missing entirely | The frozen shadow now finds `/` and `/settings`, but lazy/import ownership, dynamic uncertainty, component-file duplicate suppression, and semantic proposal dedupe remain wrong | **FAIL -> FAIL** | `workspace-router/suggest.{1,2}.json`, SHA `c685af4d...`; byte-identical and no-write |
+| I04 | Fully mapped baseline was mislabeled `baseline-targets-unmapped` | Mapped baseline report is complete, retains old/new chains, records `comparison-covered`, and has no unresolved rename; no-baseline adjacent fixture remains incomplete with `baseline-required` recovery | **PARTIAL -> PASS** | `residual/i04-mapped.{1,2}.json`, SHA `08e27c3b...`; adjacent `i04-no-baseline.*`; byte-identical and tree hashes match |
+
+### Frozen 24-cell ledger
+
+| ID | Result | Actual at `5130d97` | Evidence |
+|---|---|---|---|
+| S01 | **PASS** | Git/no-config emits a versioned, root-relative, read-only merged proposal, ignore delta, and confirmation boundary | `full-discovery/git-no-config.*` |
+| S02 | **PASS** | Non-Git state emits no gitignore proposal; adjacent existing/absent-ignore fixtures are stable/no-write | `residual/s02-*` |
+| S03 | **PASS** | Existing config keys and targets survive deterministic merge | `full-discovery/existing.*` |
+| S04 | **PASS** | Legacy target input is visible, retained, and merged without mutation | `full-discovery/legacy.*` |
+| S05 | **PASS** | Suggestion remains pre-confirm read-only; established explicit-init boundary is unchanged | full discovery before/after hashes |
+| D01 | **PASS** | pnpm package targets are exact, unique, and stably ordered | `full-discovery/pnpm.*` |
+| D02 | **PASS** | npm array/object discovery matches; malformed/duplicate manifests remain explicit unknowns | `full-discovery/npm-*`, `workspace-errors.*` |
+| D03 | **PASS** | Yarn workspace emits the same stable package contract | `full-discovery/yarn.*` |
+| D04 | **PASS** | Object/static/lazy route fixture returns `/`, `/static`, `/lazy`; dynamic/missing stay unknown | `full-discovery/routes.*` |
+| D05 | **PASS** | nearest tsconfig/jsconfig precedence and bundler fallback retain source evidence | `full-discovery/alias.*`, `jsconfig-only.*` |
+| D06 | **PASS** | Manifest and route unknowns carry stable reason and actionable recovery/fallback | `residual/d06-manifest.*`, `full-discovery/routes.*` |
+| I01 | **PASS** | Standard explicit diff report is byte-stable | `history-boundary/results/live.*` |
+| I02 | **PASS** | Entry direct/transitive chains remain explainable | history-boundary and workspace-router impact |
+| I03 | **PASS** | Workspace provider/consumer target results remain unique and explainable | workspace-router configured impact |
+| I04 | **PASS** | Mapped rename is comparison-covered with old/new chains; no-baseline rename remains structured incomplete | `residual/i04-*` |
+| I05 | **PASS** | Delete without baseline is incomplete with `baseline-required` recovery | `history-boundary/results/delete-no-baseline.*` |
+| I06 | **PASS** | Complete baseline produces a baseline-proven direct chain | `history-boundary/results/delete-with-baseline.*` |
+| I07 | **PASS** | Nested package/tsconfig changes are conservative global impact, not complete-empty | `history-boundary/results/nested-*` |
+| I08 | **PASS** | Parse and resolution failures remain incomplete with recovery | `history-boundary/results/parse.*`, `unmapped.*` |
+| I09 | **PASS** | Missing target stays visible while valid target analysis continues | `history-boundary/results/missing-target.*` |
+| I10 | **PASS** | Dedicated dynamic route stays structured unknown with recovery | `full-discovery/routes.*` |
+| I11 | **PASS** | Provably unreachable mapped change alone returns clean complete-zero | `history-boundary/results/unrelated.*` |
+| I12 | **PASS** | Truncation stays incomplete with returned/minimum counts, omitted witness, and recovery | `history-boundary/results/truncation.*`, SHA `740bb0d...` |
+| E01 | **FAIL** | Frozen JSX end-to-end proposal remains machine-invalid without manual route correction; partial route recognition does not satisfy the cell | `workspace-router/suggest.*`, SHA `c685af4d...` |
+
+**Matrix total: 23 PASS / 1 FAIL.** Every suggestion/impact pair used for the frozen matrix is byte-identical across two runs and each fixture's pre/post tree hashes match. The single E01 blocker cannot be offset by the other cells or by the passing test suite.
+
+### Three shadows and regression assessment
+
+1. **Synthetic workspace-router — FAIL E01, impact regression-free.** Suggestion pair is byte-identical/no-write at SHA-256 `c685af4d3979b3d9113e64772577e8aeff017ff74d08fc7b0b6bc0e50b623757`. The exact frozen diff (`39c3f4d...`) produces a byte-identical configured impact report at SHA-256 `0dc9a99196ac3acbfffc690cd15ab56e3bca6e9c8f6e966b6742f7b28913e9ab`. No impact regression was found, but discovery cannot complete the frozen flow without manual correction.
+2. **Synthetic history-boundary — PASS, no new impact regression.** All 13 normal/delete/rename/unmapped/missing-target/unrelated/nested-config/parse/truncation report pairs are byte-identical and the aggregate fixture tree is unchanged. S02/D06/I04 adjacent safety behavior remains conservative.
+3. **Public Depic self-shadow — impact PASS; discovery exposes the same route-scanner overreach family.** Both pairs are byte-identical/no-write. Impact stays complete 1/4 for public `@depic/web`, report SHA-256 `0cda4a7aada669af3dbe941776e872e29871291c49100f187956ec7b045c487f`. Suggestion SHA-256 is `4cfc8d4d663bcdceb2e0acdbc5f5fb8d5e1da5aa5a22797be6d4741782e8ba1f`; compared with the previous head, broad textual route fallback newly derives `/` and `/settings` from test source and emits 19 low-confidence non-static-path unknowns from ordinary object/code text. This is not a second blocker: it is adjacent evidence that E01 needs syntax-aware route candidate boundaries rather than per-fixture regex patches.
+
+No regression was found in S02, D06, I01-I12, alias precedence, workspace formats, deterministic output, read-only behavior, runtime dependency provenance, typecheck, or focused/full tests. The only product blocker remains E01 and its adjacent overmatching behavior.
+
+### E01 residual contract gaps and minimum same-PR correction
+
+1. Resolve lazy/import bindings so `SettingsPage` and `DynamicPage` associate with their actual page modules, never the router file fallback.
+2. When a dynamic path or target cannot be statically determined, emit a structured unknown with stable reason and recovery; do not synthesize `/dynamic` as a resolved target.
+3. When a route-derived entry already covers a component module, suppress the competing inferred `/SettingsPage` file-route.
+4. Dedupe or explicitly disambiguate `mergedConfig.impact.targets` by normalized semantic identity; do not retain conflicting same-ID entries with different file/symbol evidence.
+
+The next head should first rerun unchanged E01 frozen JSX/object fixtures plus the public self-shadow as an overmatching counterexample, twice with byte-identical/no-write checks. Only after all four gaps are gone should the full 24-cell matrix, three shadows, focused/full tests, typecheck, and provenance seals be rerun.
+
+### Final verdict
+
+**Overall: FAIL; PR #45 remains blocked at head `5130d9768da809b8010516fbb36cd8f75095fae2`.** S02, D06, and I04 are independently verified PASS, but E01 remains FAIL. Head, remote PR head, tracked status, lockfile, dependency resolution, CLI entry, and Core/CLI/Web dist hashes did not drift during acceptance.
 
 ## 2026-09-07 PR #45 head `019bfd1` final independent acceptance
 

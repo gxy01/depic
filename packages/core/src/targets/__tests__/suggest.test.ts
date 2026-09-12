@@ -181,4 +181,69 @@ describe('suggestTargets', () => {
       }),
     ]));
   });
+
+  it('does not treat plain TypeScript text as a JSX route candidate', async () => {
+    mkdirSync(join(root, 'src'), { recursive: true });
+    writeFileSync(join(root, 'src/notes.ts'), `
+      const routeText = '<Route path="/" element={<HomePage />} />';
+      const routeLikeObject = { path: '/settings', element: HomePage };
+      export const notes = [routeText, routeLikeObject];
+    `);
+
+    const report = await suggestTargets(root);
+
+    expect(report.targets).toEqual([]);
+    expect(report.unknown).toEqual([]);
+  });
+
+  it('resolves JSX lazy bindings, preserves dynamic unknowns, and merges route IDs semantically', async () => {
+    mkdirSync(join(root, 'src', 'pages'), { recursive: true });
+    writeFileSync(join(root, 'tsconfig.json'), JSON.stringify({
+      compilerOptions: {
+        baseUrl: '.',
+        paths: { '@pages/*': ['src/pages/*'] },
+      },
+    }));
+    writeFileSync(join(root, 'src/pages/HomePage.tsx'), 'export default function HomePage() { return null; }');
+    writeFileSync(join(root, 'src/pages/SettingsPage.tsx'), 'export default function SettingsPage() { return null; }');
+    writeFileSync(join(root, 'src/router.tsx'), `
+      import { lazy } from 'react';
+      import HomePage from '@pages/HomePage';
+      const SettingsPage = lazy(() => import('@pages/SettingsPage'));
+      const DynamicPage = lazy(() => import('@pages/' + location.hash));
+      export const routes = <>
+        <Route path="/" element={<HomePage />} />
+        <Route path="/settings" element={<SettingsPage />} />
+        <Route path="/dynamic" element={<DynamicPage />} />
+      </>;
+    `);
+    writeFileSync(join(root, 'depic.config.json'), JSON.stringify({
+      impact: {
+        targets: [
+          { kind: 'entry', id: '/', file: 'src/pages/HomePage.tsx' },
+          { kind: 'entry', id: '/settings', file: 'src/router.tsx', symbol: 'SettingsPage' },
+        ],
+      },
+    }));
+
+    const report = await suggestTargets(root);
+    const entries = report.targets.filter((item): item is Extract<typeof item, { kind: 'entry' }> => item.kind === 'entry');
+    expect(entries.map(({ id, file }) => ({ id, file }))).toEqual([
+      { id: '/', file: 'src/pages/HomePage.tsx' },
+      { id: '/settings', file: 'src/pages/SettingsPage.tsx' },
+    ]);
+    expect(report.unknown).toEqual(expect.arrayContaining([
+      expect.objectContaining({
+        id: '/dynamic',
+        reason: 'dynamic-import',
+        expression: expect.stringContaining('@pages/'),
+        recovery: expect.objectContaining({ action: 'convert-to-static-import' }),
+      }),
+    ]));
+    const merged = (report.state.config.mergedConfig.impact as { targets: Array<Record<string, unknown>> }).targets;
+    expect(merged.filter((target) => target.id === '/')).toHaveLength(1);
+    expect(merged.filter((target) => target.id === '/settings')).toEqual([
+      expect.objectContaining({ file: 'src/pages/SettingsPage.tsx' }),
+    ]);
+  });
 });

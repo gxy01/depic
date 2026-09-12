@@ -73,6 +73,8 @@ interface ImportBinding {
   specifier: string;
   imported: string;
   local: string;
+  kind?: 'import' | 'lazy';
+  expression?: string;
 }
 
 interface EntryCandidate {
@@ -559,8 +561,6 @@ function discoverRouteDeclarations(
   const files = walkSourceFiles(root);
   for (const file of files) {
     const source = readFileSync(file, 'utf-8');
-    const beforeEntryCount = state.entries.length;
-    const beforeUnknownCount = state.unknown.length;
     let parsed: ParsedFile;
     try {
       parsed = parseFile(source, file);
@@ -610,12 +610,14 @@ function discoverRouteDeclarations(
       });
       continue;
     }
+    collectLazyComponentBindings(ast, source, imports);
 
     const processed = new WeakSet<object>();
-    walkAst(ast, (node) => {
+    walkAst(ast, (node, parents) => {
+      const routeParents = parents ?? [];
       if (node.type === 'ObjectExpression') {
         if (processed.has(node)) return;
-        if (!looksLikeRouteObject(node)) return;
+        if (!looksLikeRouteObject(node) || !isRouteObjectContext(routeParents)) return;
         collectRouteObject(node, undefined, file, root, resolver, imports, source, state, processed);
       }
       if (node.type === 'JSXOpeningElement') {
@@ -625,9 +627,6 @@ function discoverRouteDeclarations(
       }
     });
 
-    if (state.entries.length === beforeEntryCount && source.includes('<Route')) {
-      discoverRouteJsxFromSource(source, file, root, resolver, imports, state);
-    }
   }
 }
 
@@ -833,228 +832,6 @@ function collectRouteJsx(
   }
 }
 
-function discoverRouteJsxFromSource(
-  source: string,
-  file: string,
-  root: string,
-  resolver: Resolver,
-  imports: Map<string, ImportBinding>,
-  state: DiscoveryState,
-): void {
-  let cursor = 0;
-  while (cursor < source.length) {
-    const start = source.indexOf('<Route', cursor);
-    if (start < 0) break;
-    const end = scanJsxTagEnd(source, start);
-    if (end < 0) break;
-    const tag = source.slice(start, end);
-    const attrs = jsxAttributesFromText(tag);
-    const routeInfo = readJsxRoutePathFromText(tag);
-    const routePath = routeInfo.path;
-    const pathExpression = !routeInfo.path && routeInfo.expression ? routeInfo.expression : undefined;
-    const resolved = resolveJsxRouteComponentFromText(attrs, file, root, resolver, imports);
-
-    if (pathExpression) {
-      state.unknown.push({
-        kind: 'unknown',
-        id: pathExpression,
-        source: 'route-declaration',
-        reason: 'non-static-path',
-        file: relativeRoot(root, file),
-        evidence: [{ kind: 'route-declaration', file: relativeRoot(root, file), detail: 'jsx-route' }],
-        diagnostics: [`Route path expression ${pathExpression} in ${relativeRoot(root, file)} could not be statically evaluated.`],
-        expression: pathExpression,
-        recovery: {
-          action: 'convert-route-path-to-static-string',
-          cli: `depic targets suggest ${root}`,
-        },
-      });
-      state.diagnostics.push({
-        level: 'warning',
-        code: 'unknown-route',
-        message: `Route path expression ${pathExpression} in ${relativeRoot(root, file)} could not be statically evaluated.`,
-        files: [relativeRoot(root, file)],
-        recovery: {
-          action: 'convert-route-path-to-static-string',
-          cli: `depic targets suggest ${root}`,
-        },
-      });
-    } else if (routePath && resolved?.target) {
-      state.claimedFiles.add(resolved.target.file);
-      state.entries.push({
-        kind: 'entry',
-        id: routePath,
-        file: resolved.target.file,
-        ...(resolved.target.symbol ? { symbol: resolved.target.symbol } : {}),
-        source: 'route-declaration',
-        confidence: resolved.confidence,
-        evidence: [
-          { kind: 'route-declaration', file: relativeRoot(root, file), detail: 'jsx-route' },
-          ...resolved.evidence,
-        ],
-      });
-    } else if (routePath && resolved?.unknown) {
-      state.unknown.push({
-        kind: 'unknown',
-        id: routePath,
-        source: 'route-declaration',
-        reason: resolved.unknown.reason,
-        file: relativeRoot(root, file),
-        evidence: [
-          { kind: 'route-declaration', file: relativeRoot(root, file), detail: 'jsx-route' },
-          ...resolved.evidence,
-        ],
-        diagnostics: resolved.unknown.diagnostics,
-        aliasSource: resolved.unknown.aliasSource,
-        specifier: resolved.unknown.specifier,
-        expression: resolved.unknown.expression,
-        recovery: resolved.unknown.recovery,
-      });
-      state.diagnostics.push({
-        level: 'warning',
-        code: resolved.unknown.reason === 'unresolved-alias' ? 'unresolved-alias' : 'unknown-route',
-        message: resolved.unknown.diagnostics[0] ?? `Unable to resolve route ${routePath}.`,
-        files: [relativeRoot(root, file)],
-      });
-    } else if (routePath && !resolved) {
-      state.unknown.push({
-        kind: 'unknown',
-        id: routePath,
-        source: 'route-declaration',
-        reason: 'missing-component',
-        file: relativeRoot(root, file),
-        evidence: [{ kind: 'route-declaration', file: relativeRoot(root, file), detail: 'jsx-route' }],
-        diagnostics: ['Route path was found but no static component binding could be proven.'],
-      });
-    }
-
-    cursor = end;
-  }
-}
-
-function scanJsxTagEnd(source: string, start: number): number {
-  let quote: '"' | '\'' | '`' | undefined;
-  let braceDepth = 0;
-  for (let index = start; index < source.length; index++) {
-    const char = source[index];
-    const prev = source[index - 1];
-    if (quote) {
-      if (char === quote && prev !== '\\') quote = undefined;
-      continue;
-    }
-    if (char === '"' || char === '\'' || char === '`') {
-      quote = char;
-      continue;
-    }
-    if (char === '{') {
-      braceDepth += 1;
-      continue;
-    }
-    if (char === '}' && braceDepth > 0) {
-      braceDepth -= 1;
-      continue;
-    }
-    if (char === '>' && braceDepth === 0) return index + 1;
-  }
-  return -1;
-}
-
-function jsxAttributesFromText(tag: string): Map<string, string> {
-  const attrs = new Map<string, string>();
-  const body = tag.replace(/^<Route\b/u, '').replace(/\/?>$/u, '');
-  for (const match of body.matchAll(/([A-Za-z_][\w-]*)\s*=\s*(\{[^{}]*\}|"[^"]*"|'[^']*')/gu)) {
-    attrs.set(match[1], match[2]);
-  }
-  return attrs;
-}
-
-function readJsxRoutePathFromText(tag: string): { path?: string; expression?: string } {
-  const match = tag.match(/\bpath\s*=\s*(?:"([^"]*)"|'([^']*)'|\{([^}]*)\})/u);
-  if (!match) return {};
-  if (typeof match[1] === 'string') return { path: match[1] };
-  if (typeof match[2] === 'string') return { path: match[2] };
-  const expression = match[3]?.trim();
-  return expression ? { expression } : {};
-}
-
-function resolveJsxRouteComponentFromText(
-  attrs: Map<string, string>,
-  file: string,
-  root: string,
-  resolver: Resolver,
-  imports: Map<string, ImportBinding>,
-): ResolvedRouteComponent | undefined {
-  const elementMatch = attrs.get('element')?.match(/^\{\s*<([A-Za-z_$][\w$]*)\s*\/>\s*\}$/u);
-  if (elementMatch) {
-    return resolveComponentBindingByName(elementMatch[1], file, root, resolver, imports);
-  }
-  const componentMatch = attrs.get('Component')?.match(/^\{\s*([A-Za-z_$][\w$]*)\s*\}$/u)
-    ?? attrs.get('component')?.match(/^\{\s*([A-Za-z_$][\w$]*)\s*\}$/u);
-  if (componentMatch) {
-    return resolveComponentBindingByName(componentMatch[1], file, root, resolver, imports);
-  }
-  const lazyMatch = attrs.get('lazy')?.match(/^\{\s*\(\)\s*=>\s*import\(([^)]+)\)\s*\}$/u);
-  if (lazyMatch) {
-    const raw = lazyMatch[1].trim();
-    const specifier = raw.match(/^["'](.+)["']$/u)?.[1];
-    const expression = raw;
-    if (!specifier) {
-      return {
-        unknown: {
-          reason: 'non-static-path',
-          diagnostics: [`Unable to statically evaluate lazy import expression in ${relativeRoot(root, file)}.`],
-          expression,
-          recovery: {
-            action: 'convert-to-static-import',
-            cli: `depic targets suggest ${root}`,
-          },
-        },
-        confidence: 'low',
-        evidence: [{ kind: 'lazy-import', file: relativeRoot(root, file), detail: expression }],
-      };
-    }
-    const resolved = resolver.resolve(specifier, file);
-    const evidence: TargetEvidence[] = [{
-      kind: 'lazy-import',
-      file: relativeRoot(root, file),
-      specifier,
-      detail: expression,
-      ...(resolved.kind === 'file' || resolved.kind === 'internal' ? { resolved: relativeRoot(root, resolved.path) } : {}),
-      ...(resolved.via?.kind === 'tsconfig' || resolved.via?.kind === 'jsconfig'
-        ? { source: relativeRoot(root, resolved.via.file) }
-        : resolved.via?.kind === 'bundler-alias'
-          ? { source: resolved.via.find }
-          : undefined),
-    }];
-    if (resolved.kind === 'file' || resolved.kind === 'internal') {
-      return {
-        target: {
-          file: relativeRoot(root, resolved.path),
-          symbol: inferTargetSymbol(resolved.path),
-        },
-        confidence: 'high',
-        evidence,
-      };
-    }
-    return {
-      unknown: {
-        reason: resolverLooksLikeAlias(specifier) ? 'unresolved-alias' : 'dynamic-import',
-        diagnostics: [`Unable to resolve lazy import ${specifier} from ${relativeRoot(root, file)}.`],
-        aliasSource: inferAliasSource(specifier),
-        specifier,
-        expression,
-        recovery: {
-          action: 'make-import-resolvable',
-          cli: `depic targets suggest ${root}`,
-        },
-      },
-      confidence: 'low',
-      evidence,
-    };
-  }
-  return undefined;
-}
-
 interface ResolvedRouteComponent {
   target?: { file: string; symbol?: string };
   unknown?: {
@@ -1211,6 +988,75 @@ function resolveComponentBindingByName(
 ): ResolvedRouteComponent {
   const binding = imports.get(name);
   if (binding) {
+    if (binding.kind === 'lazy') {
+      const evidence: TargetEvidence[] = [{
+        kind: 'lazy-import',
+        file: relativeRoot(root, file),
+        detail: binding.expression ?? 'import(...)',
+        ...(binding.specifier ? { specifier: binding.specifier } : {}),
+      }];
+      if (!binding.specifier) {
+        return {
+          unknown: {
+            reason: 'dynamic-import',
+            diagnostics: [`Unable to statically evaluate lazy component ${name} in ${relativeRoot(root, file)}.`],
+            expression: binding.expression,
+            recovery: {
+              action: 'convert-to-static-import',
+              cli: `depic targets suggest ${root}`,
+            },
+          },
+          confidence: 'low',
+          evidence,
+        };
+      }
+      const resolved = resolver.resolve(binding.specifier, file);
+      if (resolved.kind === 'file' || resolved.kind === 'internal') {
+        evidence[0] = {
+          ...evidence[0],
+          resolved: relativeRoot(root, resolved.path),
+          ...(resolved.via?.kind === 'tsconfig' || resolved.via?.kind === 'jsconfig'
+            ? { source: relativeRoot(root, resolved.via.file) }
+            : resolved.via?.kind === 'bundler-alias'
+              ? { source: resolved.via.find }
+              : undefined),
+        };
+        return {
+          target: {
+            file: relativeRoot(root, resolved.path),
+            symbol: inferTargetSymbol(resolved.path),
+          },
+          confidence: 'high',
+          evidence,
+        };
+      }
+      return {
+        unknown: {
+          reason: resolverLooksLikeAlias(binding.specifier) ? 'unresolved-alias' : 'resolution-failed',
+          diagnostics: [`Unable to resolve lazy component ${name} from ${relativeRoot(root, file)}.`],
+          aliasSource: inferAliasSource(binding.specifier),
+          specifier: binding.specifier,
+          expression: binding.expression,
+          recovery: {
+            action: 'make-import-resolvable',
+            cli: `depic targets suggest ${root}`,
+          },
+        },
+        confidence: 'low',
+        evidence,
+      };
+    }
+    if (!binding.specifier) {
+      return {
+        unknown: {
+          reason: 'resolution-failed',
+          diagnostics: [`Unable to resolve component binding ${name} from ${relativeRoot(root, file)}.`],
+          recovery: { action: 'fix-import-resolution', cli: `depic targets suggest ${root}` },
+        },
+        confidence: 'low',
+        evidence: [{ kind: 'component-binding', file: relativeRoot(root, file), detail: name }],
+      };
+    }
     const resolved = resolver.resolve(binding.specifier, file);
     const evidence: TargetEvidence[] = [{
       kind: 'component-binding',
@@ -1278,6 +1124,32 @@ function extractDynamicImportInfo(expr: any, source: string): { specifier?: stri
   return undefined;
 }
 
+function collectLazyComponentBindings(
+  ast: any,
+  source: string,
+  imports: Map<string, ImportBinding>,
+): void {
+  walkAst(ast, (node) => {
+    if (node.type !== 'VariableDeclarator') return;
+    const name = node.id?.type === 'Identifier' ? node.id.value : undefined;
+    const init = node.init;
+    if (!name || init?.type !== 'CallExpression') return;
+    const callee = init.callee;
+    const calleeName = callee?.type === 'Identifier' ? callee.value : undefined;
+    if (calleeName !== 'lazy') return;
+    const factory = init.arguments?.[0]?.expression;
+    const dynamicImport = extractDynamicImportInfo(factory, source);
+    if (!dynamicImport) return;
+    imports.set(name, {
+      kind: 'lazy',
+      local: name,
+      imported: 'default',
+      specifier: dynamicImport.specifier ?? '',
+      expression: dynamicImport.expression,
+    });
+  });
+}
+
 function walkForDynamicImport(node: any, source: string): { specifier?: string; expression: string } | undefined {
   if (!node || typeof node !== 'object') return undefined;
   if (Array.isArray(node)) {
@@ -1309,8 +1181,8 @@ function extractComponentBinding(expr: any): { kind: 'local'; name: string } | u
     return { kind: 'local', name: expr.value };
   }
   if (expr.type === 'JSXElement') {
-    const name = expr.openingElement?.name;
-    if (name?.type === 'JSXIdentifier' && typeof (name.name ?? name.value) === 'string') {
+    const name = (expr.openingElement ?? expr.opening)?.name;
+    if ((name?.type === 'JSXIdentifier' || name?.type === 'Identifier') && typeof (name.name ?? name.value) === 'string') {
       return { kind: 'local', name: name.name ?? name.value };
     }
   }
@@ -1402,17 +1274,18 @@ function walkSourceFiles(root: string): string[] {
   return files.sort();
 }
 
-function walkAst(node: any, visit: (node: any) => void, seen = new WeakSet<object>()): void {
+function walkAst(node: any, visit: (node: any, parents?: any[]) => void, seen = new WeakSet<object>(), parents: any[] = []): void {
   if (!node || typeof node !== 'object') return;
   if (Array.isArray(node)) {
-    for (const item of node) walkAst(item, visit, seen);
+    for (const item of node) walkAst(item, visit, seen, parents);
     return;
   }
   if (seen.has(node)) return;
   seen.add(node);
-  if (typeof node.type === 'string') visit(node);
+  const nextParents = typeof node.type === 'string' ? [...parents, node] : parents;
+  if (typeof node.type === 'string') visit(node, parents);
   for (const value of Object.values(node)) {
-    if (value && typeof value === 'object') walkAst(value, visit, seen);
+    if (value && typeof value === 'object') walkAst(value, visit, seen, nextParents);
   }
 }
 
@@ -1428,11 +1301,29 @@ function looksLikeRouteObject(node: any): boolean {
     || readBooleanProp(props, 'index') === true;
 }
 
+function isRouteObjectContext(parents: any[]): boolean {
+  return parents.some((parent, index) => {
+    if (parent?.type === 'VariableDeclarator' && parent.id?.type === 'Identifier') {
+      return /routes?$/iu.test(parent.id.value ?? '');
+    }
+    if (parent?.type !== 'CallExpression') return false;
+    const callee = parent.callee;
+    const name = callee?.type === 'Identifier' ? callee.value : undefined;
+    if (['createBrowserRouter', 'createHashRouter', 'createMemoryRouter', 'defineRoutes', 'useRoutes'].includes(name)) return true;
+    if (parent?.type === 'ArrayExpression') {
+      return parents.slice(0, index).some((ancestor) =>
+        ancestor?.type === 'VariableDeclarator'
+        && ancestor.id?.type === 'Identifier'
+        && /routes?$/iu.test(ancestor.id.value ?? ''),
+      );
+    }
+    return false;
+  });
+}
+
 function looksLikeRouteJsx(node: any): boolean {
   const name = jsxName(node.name);
-  if (name && name.endsWith('Route')) return true;
-  const attrs = jsxAttributes(node);
-  return attrs.has('path');
+  return Boolean(name && name.endsWith('Route'));
 }
 
 function objectProperties(node: any): Map<string, any> {
@@ -1483,7 +1374,15 @@ function readPathProp(props: Map<string, any>): string | undefined {
 
 function readJsxPath(attrs: Map<string, any>): string | undefined {
   const value = attrs.get('path');
-  return stringLiteralValue(value);
+  return jsxAttributeStringValue(value);
+}
+
+function jsxAttributeStringValue(node: any): string | undefined {
+  if (!node || typeof node !== 'object') return undefined;
+  if (node.type === 'StringLiteral' && typeof node.value === 'string') return node.value;
+  if (node.type === 'Literal' && typeof node.value === 'string') return node.value;
+  if (node.type === 'JSXExpressionContainer') return stringLiteralValue(node.expression);
+  return undefined;
 }
 
 function readBooleanProp(props: Map<string, any>, name: string): boolean | undefined {
@@ -1879,9 +1778,9 @@ function dedupeConfigTargets(targets: Array<Record<string, unknown>>): Array<Rec
   const byKey = new Map<string, Record<string, unknown>>();
   for (const target of targets) {
     const key = target.kind === 'entry'
-      ? `entry:${String(target.id ?? '')}:${String(target.file ?? '')}:${String(target.symbol ?? '')}`
+      ? `entry:${String(target.id ?? '')}`
       : `package:${String(target.id ?? '')}:${String(target.package ?? '')}`;
-    if (!byKey.has(key)) byKey.set(key, target);
+    byKey.set(key, target);
   }
   return [...byKey.values()].sort((a, b) =>
     String(a.kind ?? '').localeCompare(String(b.kind ?? ''))
